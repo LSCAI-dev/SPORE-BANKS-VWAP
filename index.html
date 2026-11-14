@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SG Banks">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<title>SG Banks — AVWAP · MACD · Stochastic</title>
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{--bg:#0e1117;--panel:#161b22;--line:#262c36;--tx:#e6edf3;--mut:#8b949e;--up:#26a69a;--dn:#ef5350;--av:#f5b400;--acc:#58a6ff}
+*{box-sizing:border-box}
+body{margin:0;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);background:var(--bg);color:var(--tx);font:13px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+header{padding:14px 18px 6px;display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;justify-content:space-between}
+h1{font-size:17px;margin:0;font-weight:600}
+.meta{color:var(--mut);font-size:12px}
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:6px 18px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;cursor:pointer}
+.card.on{border-color:var(--acc)}
+.card .t{display:flex;justify-content:space-between;align-items:baseline}
+.card .nm{font-weight:600;font-size:14px}
+.card .px{font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin-top:6px;font-variant-numeric:tabular-nums}
+.kv span:nth-child(odd){color:var(--mut)}
+.tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;margin:6px 4px 0 0;border:1px solid var(--line)}
+.pos{color:var(--up)}.neg{color:var(--dn)}
+.main{display:grid;grid-template-columns:1fr 260px;gap:10px;padding:6px 18px 18px}
+.charts{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px}
+.pane-l{color:var(--mut);font-size:11px;padding:4px 6px 0;display:flex;gap:12px;flex-wrap:wrap}
+.pane-l b{font-weight:500}
+.side{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}
+.side h3{margin:0 0 8px;font-size:13px}
+.side label{color:var(--mut);font-size:12px;display:block;margin-bottom:4px}
+.ancbox{border:1px solid var(--line);border-radius:8px;padding:10px;background:#0d1117}
+#anc{background:#161b22;color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:7px 9px;width:100%;font:15px ui-monospace,Menlo,Consolas,monospace}
+#anc.bad{border-color:var(--dn)}
+#anc.dirty{border-color:var(--av)}
+button.pri{background:#1f6feb;border-color:#1f6feb;font-weight:600}
+button.pri:hover{background:#388bfd}
+button{background:#21262d;color:var(--tx);border:1px solid var(--line);border-radius:6px;padding:5px 9px;cursor:pointer;font-size:12px}
+button:hover{border-color:var(--acc)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;margin-top:6px}
+td{padding:4px 2px;border-bottom:1px solid var(--line)}
+td:last-child{text-align:right}
+tr.cur td{color:var(--acc);font-weight:600}
+.note{color:var(--mut);font-size:11px;margin-top:10px}
+footer{color:var(--mut);font-size:11px;padding:0 18px 18px}
+#err{display:none;padding:20px;color:var(--dn)}
+@media(max-width:900px){.summary{grid-template-columns:1fr}.main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Singapore Banks — Anchored VWAP · MACD (12,26,9) · Stochastic (14,3,3)</h1>
+  <div class="meta"><span id="asof">Loading data…</span> <button id="reload" style="margin-left:6px">↻ Reload data</button></div>
+</header>
+<div class="summary" id="summary"></div>
+<div class="main">
+  <div class="charts">
+    <div class="pane-l" id="lgP"></div><div id="cP"></div>
+    <div class="pane-l" id="lgM"></div><div id="cM"></div>
+    <div class="pane-l" id="lgS"></div><div id="cS"></div>
+  </div>
+  <div class="side">
+    <h3 id="sideT"></h3>
+    <div class="ancbox">
+      <label for="anc">AVWAP anchor date (YYYY-MM-DD)</label>
+      <input type="text" id="anc" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off">
+      <div class="meta" id="ancDef" style="margin-top:4px"></div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button id="upd" class="pri">Update chart</button>
+        <button id="rst">Reset to default</button>
+      </div>
+      <div class="note" id="ancMsg" style="margin-top:6px"></div>
+    </div>
+    <div class="note" id="ancNote"></div>
+    <h3 style="margin-top:14px">AVWAP level ladder</h3>
+    <table id="ladder"></table>
+    <div class="note">Bands = AVWAP ± volume-weighted std. dev. of typical price since anchor.</div>
+  </div>
+</div>
+<div id="err">Chart library failed to load. Check your connection and reload.</div>
+<footer id="foot"></footer>
+<script>
+let RAW = null; // loaded from data.json (updated daily by GitHub Actions)
+const BANKS = [
+  {sym:'D05.SI', nm:'DBS', anchor:'2026-11-05', ev:'3Q26 results — 81¢ (66¢ ord + 15¢ capital return) declared, 5 Nov 2026'},
+  {sym:'O39.SI', nm:'OCBC', anchor:'2026-08-07', ev:'1H26 results — 47¢ interim declared, 7 Aug 2026'},
+  {sym:'U11.SI', nm:'UOB', anchor:'2026-08-07', ev:'1H26 results — 88¢ interim declared, 7 Aug 2026'}
+];
+// ===== EDIT DEFAULT ANCHOR DATES ABOVE (BANKS list) WHEN A NEW DIVIDEND IS ANNOUNCED =====
+const sgt = iso => new Date(iso).toLocaleString('en-SG',{timeZone:'Asia/Singapore',dateStyle:'medium',timeStyle:'short'})+' SGT';
+const anchors = {}; BANKS.forEach(b=>{anchors[b.sym]=b.anchor; try{const s=localStorage.getItem('anc_'+b.sym); if(s) anchors[b.sym]=s;}catch(e){}});
+
+const day = t => new Date(t*1000).toISOString().slice(0,10);
+const bars = s => RAW[s].map(r=>({time:day(r[0]),open:r[1],high:r[2],low:r[3],close:r[4],volume:r[5]}));
+
+function ema(a,n){const k=2/(n+1);const o=[];let e=null;a.forEach((v,i)=>{e=i===0?v:v*k+e*(1-k);o.push(e)});return o}
+function sma(a,n){return a.map((v,i)=>{if(i<n-1||a.slice(i-n+1,i+1).some(x=>x==null))return null;let s=0;for(let j=i-n+1;j<=i;j++)s+=a[j];return s/n})}
+function macd(c){const f=ema(c,12),s=ema(c,26);const m=c.map((_,i)=>f[i]-s[i]);const sg=ema(m,9);return c.map((_,i)=>i<25?null:{m:m[i],s:sg[i],h:m[i]-sg[i]})}
+function stoch(B){const raw=B.map((b,i)=>{if(i<13)return null;let hh=-1e9,ll=1e9;for(let j=i-13;j<=i;j++){hh=Math.max(hh,B[j].high);ll=Math.min(ll,B[j].low)}return hh===ll?50:100*(b.close-ll)/(hh-ll)});const k=sma(raw,3);const d=sma(k,3);return B.map((_,i)=>({k:k[i],d:d[i]}))}
+function avwap(B,a){let pv=0,v=0,pv2=0;return B.map(b=>{if(b.time<a)return null;const tp=(b.high+b.low+b.close)/3;pv+=tp*b.volume;v+=b.volume;pv2+=tp*tp*b.volume;const vw=pv/v;const sd=Math.sqrt(Math.max(pv2/v-vw*vw,0));return{vw,sd}})}
+
+function calc(sym){const B=bars(sym);const c=B.map(b=>b.close);return{B,M:macd(c),S:stoch(B),A:avwap(B,anchors[sym])}}
+
+const f2=x=>x==null?'—':x.toFixed(2), f3=x=>x==null?'—':x.toFixed(3);
+const sgn=x=>x>=0?'pos':'neg';
+
+function renderSummary(active){
+  const el=document.getElementById('summary');el.innerHTML='';
+  BANKS.forEach(b=>{
+    const {B,M,S,A}=calc(b.sym);const n=B.length-1;const L=B[n],P=B[n-1];
+    const chg=L.close-P.close,pct=chg/P.close*100;const a=A[n];const dist=a?(L.close/a.vw-1)*100:null;
+    const m=M[n],mp=M[n-1],s=S[n],sp=S[n-1];
+    const tags=[];
+    if(a)tags.push(L.close>=a.vw?['Above AVWAP','pos']:['Below AVWAP','neg']);
+    if(m)tags.push(m.h>=0?(mp.h<0?['MACD bull cross','pos']:['MACD hist +','pos']):(mp.h>=0?['MACD bear cross','neg']:['MACD hist −','neg']));
+    if(m)tags.push(m.m>=0?['MACD > 0','pos']:['MACD < 0','neg']);
+    if(s.k!=null){if(s.k<20)tags.push(['Stoch oversold','pos']);else if(s.k>80)tags.push(['Stoch overbought','neg']);
+      if(s.k>s.d&&sp.k<=sp.d)tags.push(['%K crossed ↑ %D','pos']);else if(s.k<s.d&&sp.k>=sp.d)tags.push(['%K crossed ↓ %D','neg']);}
+    const d=document.createElement('div');d.className='card'+(b.sym===active?' on':'');
+    d.innerHTML=`<div class="t"><span class="nm">${b.nm} <span class="meta">${b.sym.replace('.SI','')}</span></span><span class="px">${f2(L.close)}</span></div>
+    <div class="${sgn(chg)}" style="text-align:right;font-variant-numeric:tabular-nums">${chg>=0?'+':''}${f2(chg)} (${pct>=0?'+':''}${pct.toFixed(2)}%)</div>
+    <div class="kv"><span>AVWAP (${anchors[b.sym].slice(5)})</span><span>${a?f2(a.vw):'—'} <span class="${sgn(dist||0)}">${dist==null?'':(dist>=0?'+':'')+dist.toFixed(2)+'%'}</span></span>
+    <span>MACD / Sig / Hist</span><span>${f3(m&&m.m)} / ${f3(m&&m.s)} / <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span></span>
+    <span>Stoch %K / %D</span><span>${f2(s.k)} / ${f2(s.d)}</span></div>
+    <div>${tags.map(t=>`<span class="tag ${t[1]}">${t[0]}</span>`).join('')}</div>`;
+    d.onclick=()=>show(b.sym);el.appendChild(d);
+  });
+}
+
+let charts=[];var show;
+const baseOpt=h=>({height:h,layout:{background:{color:'#161b22'},textColor:'#8b949e',fontSize:11},grid:{vertLines:{color:'#1f252e'},horzLines:{color:'#1f252e'}},rightPriceScale:{borderColor:'#262c36',minimumWidth:70},timeScale:{borderColor:'#262c36'},crosshair:{mode:0}});
+
+show=function(sym){
+  const b=BANKS.find(x=>x.sym===sym);
+  try{localStorage.setItem('bank',sym)}catch(e){}
+  charts.forEach(c=>c.remove());charts=[];
+  const {B,M,S,A}=calc(sym);
+  const W=document.getElementById('cP').parentElement.clientWidth-12;
+  const cp=LightweightCharts.createChart(document.getElementById('cP'),{...baseOpt(430),width:W});
+  const cm=LightweightCharts.createChart(document.getElementById('cM'),{...baseOpt(150),width:W});
+  const cs=LightweightCharts.createChart(document.getElementById('cS'),{...baseOpt(150),width:W});
+  charts=[cp,cm,cs];
+  const cand=cp.addCandlestickSeries({upColor:'#26a69a',downColor:'#ef5350',borderVisible:false,wickUpColor:'#26a69a',wickDownColor:'#ef5350'});
+  cand.setData(B.map(({volume,...r})=>r));
+  const vol=cp.addHistogramSeries({priceScaleId:'vol',priceFormat:{type:'volume'},lastValueVisible:false,priceLineVisible:false});
+  cp.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0}});
+  vol.setData(B.map(r=>({time:r.time,value:r.volume,color:r.close>=r.open?'rgba(38,166,154,.35)':'rgba(239,83,80,.35)'})));
+  const line=(c,w,s)=>cp.addLineSeries({color:c,lineWidth:w,lineStyle:s||0,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:false});
+  const av=line('#f5b400',2),u1=line('rgba(245,180,0,.55)',1,2),l1=line('rgba(245,180,0,.55)',1,2),u2=line('rgba(245,180,0,.3)',1,1),l2=line('rgba(245,180,0,.3)',1,1);
+  const pts=(fn)=>B.map((r,i)=>A[i]?{time:r.time,value:fn(A[i])}:null).filter(Boolean);
+  av.setData(pts(a=>a.vw));u1.setData(pts(a=>a.vw+a.sd));l1.setData(pts(a=>a.vw-a.sd));u2.setData(pts(a=>a.vw+2*a.sd));l2.setData(pts(a=>a.vw-2*a.sd));
+  const ai=A.findIndex(x=>x);
+  if(ai>=0)cand.setMarkers([{time:B[ai].time,position:'belowBar',color:'#f5b400',shape:'arrowUp',text:'Anchor'}]);
+  // MACD
+  const hs=cm.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
+  hs.setData(B.map((r,i)=>M[i]?{time:r.time,value:M[i].h,color:M[i].h>=0?(i&&M[i-1]&&M[i].h>=M[i-1].h?'#26a69a':'rgba(38,166,154,.5)'):(i&&M[i-1]&&M[i].h<=M[i-1].h?'#ef5350':'rgba(239,83,80,.5)')}:{time:r.time}));
+  const ml=cm.addLineSeries({color:'#58a6ff',lineWidth:2,priceLineVisible:false});ml.setData(B.map((r,i)=>M[i]?{time:r.time,value:M[i].m}:{time:r.time}));
+  const sl=cm.addLineSeries({color:'#ff9f43',lineWidth:1.5,priceLineVisible:false});sl.setData(B.map((r,i)=>M[i]?{time:r.time,value:M[i].s}:{time:r.time}));
+  ml.createPriceLine({price:0,color:'#3a414b',lineWidth:1,lineStyle:2,axisLabelVisible:false});
+  // Stoch
+  const kl=cs.addLineSeries({color:'#58a6ff',lineWidth:2,priceLineVisible:false});kl.setData(B.map((r,i)=>S[i].k!=null?{time:r.time,value:S[i].k}:{time:r.time}));
+  const dl=cs.addLineSeries({color:'#ff9f43',lineWidth:1.5,priceLineVisible:false});dl.setData(B.map((r,i)=>S[i].d!=null?{time:r.time,value:S[i].d}:{time:r.time}));
+  [80,20].forEach(p=>kl.createPriceLine({price:p,color:'#5a626d',lineWidth:1,lineStyle:2,axisLabelVisible:true}));
+  kl.applyOptions({autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})});
+  // sync
+  let lock=false;charts.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(lock||!r)return;lock=true;charts.forEach(o=>o!==c&&o.timeScale().setVisibleLogicalRange(r));lock=false}));
+  const n=B.length;cp.timeScale().setVisibleLogicalRange({from:n-130,to:n+3});
+  // legends
+  const lg=(i)=>{const r=B[i],a=A[i],m=M[i],s=S[i];
+    document.getElementById('lgP').innerHTML=`<b>${b.nm}</b> ${r.time} O ${f2(r.open)} H ${f2(r.high)} L ${f2(r.low)} C ${f2(r.close)} Vol ${(r.volume/1e6).toFixed(2)}M <span style="color:#f5b400">AVWAP ${a?f2(a.vw):'—'}</span> <span style="color:rgba(245,180,0,.7)">±1σ ${a?f2(a.vw-a.sd)+' / '+f2(a.vw+a.sd):'—'}</span>`;
+    document.getElementById('lgM').innerHTML=`MACD (12,26,9) <span style="color:#58a6ff">${f3(m&&m.m)}</span> <span style="color:#ff9f43">${f3(m&&m.s)}</span> <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span>`;
+    document.getElementById('lgS').innerHTML=`Stoch (14,3,3) <span style="color:#58a6ff">%K ${f2(s.k)}</span> <span style="color:#ff9f43">%D ${f2(s.d)}</span>`;};
+  lg(n-1);
+  const idx={};B.forEach((r,i)=>idx[r.time]=i);
+  charts.forEach(c=>c.subscribeCrosshairMove(p=>{if(!p||!p.time){lg(n-1);return}const t=typeof p.time==='string'?p.time:`${p.time.year}-${String(p.time.month).padStart(2,'0')}-${String(p.time.day).padStart(2,'0')}`;if(idx[t]!=null)lg(idx[t])}));
+  // side
+  document.getElementById('sideT').textContent=`${b.nm} (${sym})`;
+  const inp=document.getElementById('anc'),msg=document.getElementById('ancMsg');
+  inp.value=anchors[sym];inp.className='';
+  document.getElementById('ancDef').textContent=`Default: ${b.anchor} · data range ${B[0].time} to ${B[n-1].time}`;
+  inp.oninput=()=>{inp.className=inp.value.trim()===anchors[sym]?'':'dirty';msg.textContent=inp.className?'Press Update chart (or Enter) to apply.':''};
+  inp.onkeydown=e=>{if(e.key==='Enter')apply()};
+  const apply=()=>{
+    const v=inp.value.trim();
+    const ok=/^\d{4}-\d{2}-\d{2}$/.test(v)&&!isNaN(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
+    if(!ok){inp.className='bad';msg.innerHTML='<span class="neg">Invalid date — use YYYY-MM-DD.</span>';return}
+    if(v<B[0].time||v>B[n-1].time){inp.className='bad';msg.innerHTML=`<span class="neg">Out of range — pick a date between ${B[0].time} and ${B[n-1].time}.</span>`;return}
+    anchors[sym]=v;try{v===b.anchor?localStorage.removeItem('anc_'+sym):localStorage.setItem('anc_'+sym,v)}catch(e){};show(sym);
+  };
+  document.getElementById('upd').onclick=apply;
+  document.getElementById('rst').onclick=()=>{inp.value=b.anchor;apply()};
+  const firstBar=A.findIndex(x=>x);const fb=firstBar>=0?B[firstBar].time:null;
+  msg.textContent=fb&&fb!==anchors[sym]?`${anchors[sym]} is not a trading day — VWAP starts at next bar ${fb}.`:'';
+  document.getElementById('ancNote').innerHTML=anchors[sym]===b.anchor?`Using default anchor: ${b.ev}.`:`Using custom anchor ${anchors[sym]}. Default ${b.anchor}: ${b.ev}.`;
+  const a=A[n-1],L=B[n-1].close;
+  if(a){const rows=[['+2σ',a.vw+2*a.sd],['+1σ',a.vw+a.sd],['AVWAP',a.vw],['−1σ',a.vw-a.sd],['−2σ',a.vw-2*a.sd]];
+    let h='';let placed=false;rows.forEach(([k,v])=>{if(!placed&&L>=v){h+=`<tr class="cur"><td>Last close</td><td>${f2(L)}</td></tr>`;placed=true}h+=`<tr><td>${k}</td><td>${f2(v)} <span class="meta">(${((v/L-1)*100>=0?'+':'')}${((v/L-1)*100).toFixed(1)}%)</span></td></tr>`});
+    if(!placed)h+=`<tr class="cur"><td>Last close</td><td>${f2(L)}</td></tr>`;
+    document.getElementById('ladder').innerHTML=h;}
+  renderSummary(sym);
+};
+
+
+document.getElementById('foot').innerHTML='Source: Yahoo Finance chart API (query1.finance.yahoo.com), daily OHLCV, prices unadjusted for dividends. AVWAP uses typical price (H+L+C)/3 × volume from the anchor bar onward. Dividend announcement dates: DBS newsroom (5 Nov 2026), OCBC media release (7 Aug 2026), UOB 1H26 results (7 Aug 2026). Data refreshes on weekdays after SGX close via GitHub Actions — verify against your broker terminal before acting.';
+let current='D05.SI';try{current=localStorage.getItem('bank')||current}catch(e){}
+const _show=show; show=sym=>{current=sym;_show(sym)};
+async function loadData(){
+  const st=document.getElementById('asof');st.textContent='Loading data…';
+  try{
+    const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();RAW=j.symbols;
+    const last=day(Math.max(...Object.values(RAW).map(a=>a[a.length-1][0])));
+    st.textContent=`Data: ${j.source||'Yahoo Finance'} · last bar ${last} · updated ${sgt(j.updated)}`;
+    show(current);
+  }catch(e){st.innerHTML='<span class="neg">Could not load data.json ('+e.message+')</span>'}
+}
+document.getElementById('reload').onclick=loadData;
+if(!window.LightweightCharts){document.getElementById('err').style.display='block'}
+else{loadData();let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>RAW&&show(current),200)});}
+</script>
+</body>
+</html>
