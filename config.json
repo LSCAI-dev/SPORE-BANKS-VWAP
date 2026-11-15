@@ -1,0 +1,28 @@
+{
+  "_help": "Add a new entry to a bank's 'anchors' list (latest last) when it announces a dividend. The app uses the latest anchor as its default; the scanner uses the latest anchor on or before each scan date.",
+  "banks": [
+    {
+      "sym": "D05.SI",
+      "nm": "DBS",
+      "note": "Ex-dividend 13 Nov 2026 (81¢): that close includes the dividend drop — add back ~0.81 when comparing with AVWAP.",
+      "anchors": [
+        {"date": "2026-08-06", "ev": "2Q26 results — 81¢ (66¢ ord + 15¢ capital return) declared, 6 Aug 2026"},
+        {"date": "2026-11-05", "ev": "3Q26 results — 81¢ (66¢ ord + 15¢ capital return) declared, 5 Nov 2026"}
+      ]
+    },
+    {
+      "sym": "O39.SI",
+      "nm": "OCBC",
+      "anchors": [
+        {"date": "2026-08-07", "ev": "1H26 results — 47¢ interim declared, 7 Aug 2026"}
+      ]
+    },
+    {
+      "sym": "U11.SI",
+      "nm": "UOB",
+      "anchors": [
+        {"date": "2026-08-07", "ev": "1H26 results — 88¢ interim declared, 7 Aug 2026"}
+      ]
+    }
+  ]
+}

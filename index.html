@@ -64,6 +64,15 @@ details.rules summary{cursor:pointer;font-weight:600;font-size:13px}
 details.rules p,details.rules li{color:#c9d1d9;margin:6px 0}
 details.rules ol,details.rules ul{padding-left:18px;margin:4px 0}
 .cstat{float:right;font-size:11px;font-weight:700;padding:1px 7px;border-radius:4px}
+.hist{margin:0 18px 18px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px}
+.hist h3{font-size:14px}
+.tw{overflow-x:auto;margin-top:8px;-webkit-overflow-scrolling:touch}
+#histTbl{min-width:1250px;font-size:12px}
+#histTbl th{position:sticky;top:0;background:#1c2128;color:var(--mut);font-weight:500;text-align:left;padding:6px 6px;white-space:nowrap;border-bottom:1px solid var(--line)}
+#histTbl td{padding:5px 6px;white-space:nowrap;text-align:left;vertical-align:top}
+#histTbl tr.bf td{opacity:.85}
+#histTbl td:first-child,#histTbl th:first-child{position:sticky;left:0;z-index:1;background:#161b22}
+#histTbl th:first-child{background:#1c2128;z-index:2}
 @media(max-width:900px){.summary{grid-template-columns:1fr}.main{grid-template-columns:1fr}}
 </style>
 </head>
@@ -76,6 +85,7 @@ details.rules ol,details.rules ul{padding-left:18px;margin:4px 0}
 <div class="main">
   <div class="charts">
     <div class="pane-l" id="lgP"></div><div id="cP"></div>
+    <div class="pane-l" style="padding-top:0"><span><span class="pos">■</span> est. ask (buy) volume</span><span><span class="neg">■</span> est. bid (sell) volume</span><span>— split by close position in day's range; not true tick-level bid/ask data</span></div>
     <div class="pane-l" id="lgM"></div><div id="cM"></div>
     <div class="pane-l" id="lgS"></div><div id="cS"></div>
   </div>
@@ -120,18 +130,26 @@ details.rules ol,details.rules ul{padding-left:18px;margin:4px 0}
     </details>
   </div>
 </div>
+<div class="hist">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
+    <h3 style="margin:0">Scan history — <span id="histT"></span></h3>
+    <div><button id="histMore">Show all</button> <a id="csvLink" href="scan_log.csv" download style="margin-left:8px;color:var(--acc);font-size:12px">⬇ Download CSV (all banks)</a></div>
+  </div>
+  <div class="note" id="histSum"></div>
+  <div class="note">One scan saved per bank per trading day after the close (never re-saved). Next-day O/H/L/C filled in once the following session closes. <span class="meta">bf</span> = rebuilt from history with the anchor in force on that date. • = status changed from the previous day.</div>
+  <div class="tw"><table id="histTbl"></table></div>
+</div>
 <div id="err">Chart library failed to load. Check your connection and reload.</div>
 <footer id="foot"></footer>
 <script>
 let RAW = null; // loaded from data.json (updated daily by GitHub Actions)
-const BANKS = [
-  {sym:'D05.SI', nm:'DBS', anchor:'2026-11-05', note:'Ex-dividend 13 Nov 2026 (81¢): that close includes the dividend drop — add back ~0.81 when comparing with AVWAP.', ev:'3Q26 results — 81¢ (66¢ ord + 15¢ capital return) declared, 5 Nov 2026'},
-  {sym:'O39.SI', nm:'OCBC', anchor:'2026-08-07', ev:'1H26 results — 47¢ interim declared, 7 Aug 2026'},
-  {sym:'U11.SI', nm:'UOB', anchor:'2026-08-07', ev:'1H26 results — 88¢ interim declared, 7 Aug 2026'}
-];
-// ===== EDIT DEFAULT ANCHOR DATES ABOVE (BANKS list) WHEN A NEW DIVIDEND IS ANNOUNCED =====
+let BANKS = []; // built from config.json — edit anchors there when a bank announces a dividend
+function applyConfig(cfg){
+  BANKS=cfg.banks.map(b=>{const a=b.anchors[b.anchors.length-1];return {sym:b.sym,nm:b.nm,note:b.note||'',anchor:a.date,ev:a.ev}});
+  BANKS.forEach(b=>{anchors[b.sym]=b.anchor;try{const s=localStorage.getItem('anc_'+b.sym);if(s)anchors[b.sym]=s}catch(e){}});
+}
 const sgt = iso => new Date(iso).toLocaleString('en-SG',{timeZone:'Asia/Singapore',dateStyle:'medium',timeStyle:'short'})+' SGT';
-const anchors = {}; BANKS.forEach(b=>{anchors[b.sym]=b.anchor; try{const s=localStorage.getItem('anc_'+b.sym); if(s) anchors[b.sym]=s;}catch(e){}});
+const anchors = {};
 
 const day = t => new Date(t*1000).toISOString().slice(0,10);
 const bars = s => RAW[s].map(r=>({time:day(r[0]),open:r[1],high:r[2],low:r[3],close:r[4],volume:r[5]}));
@@ -142,6 +160,44 @@ function macd(c){const f=ema(c,12),s=ema(c,26);const m=c.map((_,i)=>f[i]-s[i]);c
 function stoch(B){const raw=B.map((b,i)=>{if(i<13)return null;let hh=-1e9,ll=1e9;for(let j=i-13;j<=i;j++){hh=Math.max(hh,B[j].high);ll=Math.min(ll,B[j].low)}return hh===ll?50:100*(b.close-ll)/(hh-ll)});const k=sma(raw,3);const d=sma(k,3);return B.map((_,i)=>({k:k[i],d:d[i]}))}
 function avwap(B,a){let pv=0,v=0,pv2=0;return B.map(b=>{if(b.time<a)return null;const tp=(b.high+b.low+b.close)/3;pv+=tp*b.volume;v+=b.volume;pv2+=tp*tp*b.volume;const vw=pv/v;const sd=Math.sqrt(Math.max(pv2/v-vw*vw,0));return{vw,sd}})}
 
+/* ===== SCAN HISTORY (from scans.json, written once per bank per day by scripts/scan.py) ===== */
+let SCANS=[];let histAll=false;
+function renderHistory(sym){
+  const b=BANKS.find(x=>x.sym===sym);const el=document.getElementById('histTbl');
+  document.getElementById('histT').textContent=b?b.nm:sym;
+  const rows=SCANS.filter(s=>s.sym===sym).sort((x,y)=>y.date.localeCompare(x.date));
+  const sum=document.getElementById('histSum');
+  if(!rows.length){el.innerHTML='<tr><td>No saved scans yet — they are added after each weekday close.</td></tr>';sum.textContent='';return}
+  const cnt=k=>rows.filter(r=>r.status===k).length;
+  const A=rows.filter(r=>r.outcome&&r.outcome.A);const trig=A.filter(r=>r.outcome.A.triggered);
+  sum.innerHTML=`${rows.length} scans (${rows[rows.length-1].date} → ${rows[0].date}) · <span class="pos">ENTRY ${cnt('ENTRY')}</span> · <span class="amb">WAIT ${cnt('WAIT')}</span> · <span class="neg">STAND ASIDE ${cnt('STAND ASIDE')}</span> · Setup A triggered next day: ${trig.length}/${A.length}${trig.length?` (T1 touched ${trig.filter(r=>r.outcome.A.t1_touched).length}, stop touched ${trig.filter(r=>r.outcome.A.stop_touched).length})`:''}`;
+  const ck=v=>v?'<span class="pos">✓</span>':'<span class="neg">✗</span>';
+  const yn=(v,good)=>v==null?'':(v?`<span class="${good?'pos':'neg'}">✓</span>`:'<span class="meta">–</span>');
+  const st=(r,id)=>{const s=r.setups.find(x=>x.id===id);return s?`${f2(s.entry)} / ${f2(s.stop)} / ${f2(s.t1)} <span class="meta">${s.r1!=null?s.r1.toFixed(1)+'R':''}</span>`:'<span class="meta">—</span>'};
+  const oc=r=>{if(!r.outcome)return '<span class="meta">pending next bar</span>';const o=[];const a=r.outcome.A,bb=r.outcome.B;
+    if(a)o.push(a.triggered?`A triggered${a.t1_touched?' · <span class="pos">T1 hit</span>':''}${a.stop_touched?' · <span class="neg">stop hit</span>':''}`:'<span class="meta">A not triggered</span>');
+    if(bb)o.push(bb.invalidated?'<span class="neg">B invalidated</span>':`B held${bb.t1_touched?' · <span class="pos">T1 hit</span>':''}${bb.stop_touched?' · <span class="neg">stop zone</span>':''}`);
+    return o.join('<br>')};
+  const show=histAll?rows:rows.slice(0,20);
+  let h=`<thead><tr><th>Scan date</th><th>Status</th><th>AVWAP · MACD · STOCH</th><th>Close</th><th>AVWAP (gap)</th><th>MACD hist</th><th>%K / %D</th><th>Setup A entry / stop / T1</th><th>Setup B entry / stop / T1</th><th>Next day</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Δ%</th><th>Outcome</th></tr></thead><tbody>`;
+  show.forEach((r,i)=>{const prev=rows[i+1];const chg=prev&&prev.status!==r.status;const n=r.next;
+    h+=`<tr${r.source==='backfill'?' class="bf"':''}><td>${r.date}${r.source==='backfill'?' <span class="meta">bf</span>':''}</td>
+    <td><span class="status ${r.status==='ENTRY'?'pos':r.status==='WAIT'?'amb':'neg'}" style="font-size:10.5px;padding:1px 6px">${r.status}</span>${chg?' <span class="amb" title="status changed">•</span>':''}</td>
+    <td style="text-align:center">${ck(r.c1)} ${ck(r.c2)} ${ck(r.c3)}</td><td>${f2(r.close)}</td>
+    <td>${f2(r.avwap)} <span class="${r.dist_pct>=0?'pos':'neg'}">${r.dist_pct>=0?'+':''}${r.dist_pct.toFixed(1)}%</span></td>
+    <td class="${r.hist>=0?'pos':'neg'}">${r.hist.toFixed(3)}</td><td>${r.k.toFixed(1)} / ${r.d.toFixed(1)}</td>
+    <td>${st(r,'A')}</td><td>${st(r,'B')}</td>
+    ${n?`<td>${n.date}</td><td>${f2(n.open)}</td><td>${f2(n.high)}</td><td>${f2(n.low)}</td><td>${f2(n.close)}</td><td class="${n.chg_pct>=0?'pos':'neg'}">${n.chg_pct>=0?'+':''}${n.chg_pct.toFixed(2)}</td>`:'<td colspan="6" class="meta">— awaiting next trading day —</td>'}
+    <td style="font-size:11px">${oc(r)}</td></tr>`});
+  h+='</tbody>';el.innerHTML=h;
+  const more=document.getElementById('histMore');more.style.display=rows.length>20?'':'none';more.textContent=histAll?'Show latest 20':`Show all ${rows.length}`;
+  more.onclick=()=>{histAll=!histAll;renderHistory(sym)};
+}
+/* ===== ESTIMATED ASK / BID VOLUME =====
+   Daily bars carry no trade-side data, so volume is split by close location within the day's range:
+   ask (buy) share = (Close - Low) / (High - Low); bid (sell) share = 1 - that. Doji with H = L -> 50/50. */
+function splitVol(r){const g=r.high-r.low;const f=g>0?(r.close-r.low)/g:0.5;return{buy:r.volume*f,sell:r.volume*(1-f),f}}
+function buyShare(B,from){let b=0,t=0;B.slice(Math.max(0,from)).forEach(r=>{b+=splitVol(r).buy;t+=r.volume});return t?b/t:0.5}
 /* ===== TRADING RULES ENGINE ===== */
 const R2=x=>Math.round(x*100)/100;
 function evalRules(sym){
@@ -225,7 +281,8 @@ function renderSummary(active){
     <div class="${sgn(chg)}" style="text-align:right;font-variant-numeric:tabular-nums">${chg>=0?'+':''}${f2(chg)} (${pct>=0?'+':''}${pct.toFixed(2)}%)</div>
     <div class="kv"><span>AVWAP (${anchors[b.sym].slice(5)})</span><span>${a?f2(a.vw):'—'} <span class="${sgn(dist||0)}">${dist==null?'':(dist>=0?'+':'')+dist.toFixed(2)+'%'}</span></span>
     <span>MACD / Sig / Hist</span><span>${f3(m&&m.m)} / ${f3(m&&m.s)} / <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span></span>
-    <span>Stoch %K / %D</span><span>${f2(s.k)} / ${f2(s.d)}</span></div>
+    <span>Stoch %K / %D</span><span>${f2(s.k)} / ${f2(s.d)}</span>
+    <span>Est. ask vol % 1d / 5d / anchor</span><span>${(()=>{const ai=A.findIndex(x=>x);const p=x=>`<span class="${x>=0.5?'pos':'neg'}">${(x*100).toFixed(0)}</span>`;return `${p(buyShare(B,n))} / ${p(buyShare(B,n-4))} / ${p(ai<0?0.5:buyShare(B,ai))}`})()}</span></div>
     <div>${tags.map(t=>`<span class="tag ${t[1]}">${t[0]}</span>`).join('')}</div>`;
     d.onclick=()=>show(b.sym);el.appendChild(d);
   });
@@ -246,9 +303,11 @@ show=function(sym){
   charts=[cp,cm,cs];
   const cand=cp.addCandlestickSeries({upColor:'#26a69a',downColor:'#ef5350',borderVisible:false,wickUpColor:'#26a69a',wickDownColor:'#ef5350'});
   cand.setData(B.map(({volume,...r})=>r));
-  const vol=cp.addHistogramSeries({priceScaleId:'vol',priceFormat:{type:'volume'},lastValueVisible:false,priceLineVisible:false});
-  cp.priceScale('vol').applyOptions({scaleMargins:{top:0.82,bottom:0}});
-  vol.setData(B.map(r=>({time:r.time,value:r.volume,color:r.close>=r.open?'rgba(38,166,154,.35)':'rgba(239,83,80,.35)'})));
+  const vo={priceScaleId:'vol',priceFormat:{type:'volume'},lastValueVisible:false,priceLineVisible:false};
+  const volT=cp.addHistogramSeries(vo),volB=cp.addHistogramSeries(vo);
+  cp.priceScale('vol').applyOptions({scaleMargins:{top:0.78,bottom:0}});
+  volT.setData(B.map(r=>({time:r.time,value:r.volume,color:'rgba(239,83,80,.55)'})));          // full bar = total; red part showing = est. bid (sell)
+  volB.setData(B.map(r=>({time:r.time,value:splitVol(r).buy,color:'rgba(38,166,154,.75)'})));  // green from 0 = est. ask (buy)
   const line=(c,w,s)=>cp.addLineSeries({color:c,lineWidth:w,lineStyle:s||0,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:false});
   const av=line('#f5b400',2),u1=line('rgba(245,180,0,.55)',1,2),l1=line('rgba(245,180,0,.55)',1,2),u2=line('rgba(245,180,0,.3)',1,1),l2=line('rgba(245,180,0,.3)',1,1);
   const pts=(fn)=>B.map((r,i)=>A[i]?{time:r.time,value:fn(A[i])}:null).filter(Boolean);
@@ -271,7 +330,7 @@ show=function(sym){
   const n=B.length;cp.timeScale().setVisibleLogicalRange({from:n-130,to:n+3});
   // legends
   const lg=(i)=>{const r=B[i],a=A[i],m=M[i],s=S[i];
-    document.getElementById('lgP').innerHTML=`<b>${b.nm}</b> ${r.time} O ${f2(r.open)} H ${f2(r.high)} L ${f2(r.low)} C ${f2(r.close)} Vol ${(r.volume/1e6).toFixed(2)}M <span style="color:#f5b400">AVWAP ${a?f2(a.vw):'—'}</span> <span style="color:rgba(245,180,0,.7)">±1σ ${a?f2(a.vw-a.sd)+' / '+f2(a.vw+a.sd):'—'}</span>`;
+    document.getElementById('lgP').innerHTML=`<b>${b.nm}</b> ${r.time} O ${f2(r.open)} H ${f2(r.high)} L ${f2(r.low)} C ${f2(r.close)} Vol ${(r.volume/1e6).toFixed(2)}M <span class="pos">Ask ${(splitVol(r).buy/1e6).toFixed(2)}M (${(splitVol(r).f*100).toFixed(0)}%)</span> <span class="neg">Bid ${(splitVol(r).sell/1e6).toFixed(2)}M</span> <span style="color:#f5b400">AVWAP ${a?f2(a.vw):'—'}</span> <span style="color:rgba(245,180,0,.7)">±1σ ${a?f2(a.vw-a.sd)+' / '+f2(a.vw+a.sd):'—'}</span>`;
     document.getElementById('lgM').innerHTML=`MACD (12,26,9) <span style="color:#58a6ff">${f3(m&&m.m)}</span> <span style="color:#ff9f43">${f3(m&&m.s)}</span> <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span>`;
     document.getElementById('lgS').innerHTML=`Stoch (14,3,3) <span style="color:#58a6ff">%K ${f2(s.k)}</span> <span style="color:#ff9f43">%D ${f2(s.d)}</span>`;};
   lg(n-1);
@@ -303,22 +362,29 @@ show=function(sym){
     document.getElementById('ladder').innerHTML=h;}
   renderSetups(sym);
   renderSummary(sym);
+  renderHistory(sym);
 };
 
 
-document.getElementById('foot').innerHTML='Source: Yahoo Finance chart API (query1.finance.yahoo.com), daily OHLCV, prices unadjusted for dividends. AVWAP uses typical price (H+L+C)/3 × volume from the anchor bar onward. Dividend announcement dates: DBS newsroom (5 Nov 2026), OCBC media release (7 Aug 2026), UOB 1H26 results (7 Aug 2026). Data refreshes on weekdays after SGX close via GitHub Actions — verify against your broker terminal before acting.';
+document.getElementById('foot').innerHTML='Source: Yahoo Finance chart API (query1.finance.yahoo.com), daily OHLCV, prices unadjusted for dividends. Ask/bid volume is an estimate: ask share = (C−L)/(H−L) of the day’s volume (true trade-side split needs SGX tick data). AVWAP uses typical price (H+L+C)/3 × volume from the anchor bar onward. Dividend announcement dates (config.json): DBS newsroom (6 Aug & 5 Nov 2026), OCBC media release (7 Aug 2026), UOB 1H26 results (7 Aug 2026). Data refreshes on weekdays after SGX close via GitHub Actions — verify against your broker terminal before acting.';
 let current='D05.SI';try{current=localStorage.getItem('bank')||current}catch(e){}
 const _show=show; show=sym=>{current=sym;_show(sym)};
+async function getJSON(f,optional){
+  if(window.EMBED&&window.EMBED[f])return window.EMBED[f];
+  const r=await fetch(f+'?t='+Date.now(),{cache:'no-store'});
+  if(!r.ok){if(optional)return null;throw new Error(f+' HTTP '+r.status)}
+  return r.json();
+}
 async function loadData(){
   const st=document.getElementById('asof');st.textContent='Loading data…';
   try{
-    const r=await fetch('data.json?t='+Date.now(),{cache:'no-store'});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const j=await r.json();RAW=j.symbols;
+    const [cfg,j,sc]=await Promise.all([getJSON('config.json'),getJSON('data.json'),getJSON('scans.json',true)]);
+    applyConfig(cfg);RAW=j.symbols;SCANS=(sc&&sc.scans)||[];
+    if(!BANKS.some(b=>b.sym===current))current=BANKS[0].sym;
     const last=day(Math.max(...Object.values(RAW).map(a=>a[a.length-1][0])));
-    st.textContent=`Data: ${j.source||'Yahoo Finance'} · last bar ${last} · updated ${sgt(j.updated)}`;
+    st.textContent=`Data: ${j.source||'Yahoo Finance'} · last bar ${last} · updated ${sgt(j.updated)}${sc?` · scan log ${SCANS.length} records`:''}`;
     show(current);
-  }catch(e){st.innerHTML='<span class="neg">Could not load data.json ('+e.message+')</span>'}
+  }catch(e){st.innerHTML='<span class="neg">Could not load data ('+e.message+')</span>'}
 }
 document.getElementById('reload').onclick=loadData;
 if(!window.LightweightCharts){document.getElementById('err').style.display='block'}
