@@ -30,7 +30,7 @@ h1{font-size:17px;margin:0;font-weight:600}
 .kv span:nth-child(odd){color:var(--mut)}
 .tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;margin:6px 4px 0 0;border:1px solid var(--line)}
 .pos{color:var(--up)}.neg{color:var(--dn)}
-.main{display:grid;grid-template-columns:1fr 260px;gap:10px;padding:6px 18px 18px}
+.main{display:grid;grid-template-columns:1fr 330px;gap:10px;padding:6px 18px 18px}
 .charts{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px}
 .pane-l{color:var(--mut);font-size:11px;padding:4px 6px 0;display:flex;gap:12px;flex-wrap:wrap}
 .pane-l b{font-weight:500}
@@ -52,6 +52,18 @@ tr.cur td{color:var(--acc);font-weight:600}
 .note{color:var(--mut);font-size:11px;margin-top:10px}
 footer{color:var(--mut);font-size:11px;padding:0 18px 18px}
 #err{display:none;padding:20px;color:var(--dn)}
+.status{display:inline-block;font-weight:700;padding:3px 10px;border-radius:6px;font-size:13px;letter-spacing:.5px}
+.status.pos{background:rgba(38,166,154,.18);color:var(--up)}.status.neg{background:rgba(239,83,80,.18);color:var(--dn)}.status.amb{background:rgba(245,180,0,.18);color:var(--av)}
+.amb{color:var(--av)}
+.flt{margin-top:6px;font-size:12px}
+.setup{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-top:10px;background:#0d1117}
+.sn{font-weight:600;font-size:12.5px}
+.warn{font-size:11.5px;color:var(--av);margin-top:6px}
+details.rules{margin-top:14px;border-top:1px solid var(--line);padding-top:8px;font-size:12px}
+details.rules summary{cursor:pointer;font-weight:600;font-size:13px}
+details.rules p,details.rules li{color:#c9d1d9;margin:6px 0}
+details.rules ol,details.rules ul{padding-left:18px;margin:4px 0}
+.cstat{float:right;font-size:11px;font-weight:700;padding:1px 7px;border-radius:4px}
 @media(max-width:900px){.summary{grid-template-columns:1fr}.main{grid-template-columns:1fr}}
 </style>
 </head>
@@ -83,6 +95,29 @@ footer{color:var(--mut);font-size:11px;padding:0 18px 18px}
     <h3 style="margin-top:14px">AVWAP level ladder</h3>
     <table id="ladder"></table>
     <div class="note">Bands = AVWAP ± volume-weighted std. dev. of typical price since anchor.</div>
+    <h3 style="margin-top:14px">Trade setup</h3>
+    <div id="setups"></div>
+    <details class="rules"><summary>Trading rules</summary>
+      <p><b>Entry (long) — all 3 on a daily close:</b></p>
+      <ol>
+        <li><b>Location (AVWAP):</b> close above anchored VWAP, or reclaims it. In an uptrend, a pullback that tags AVWAP or −1σ and closes back above also qualifies.</li>
+        <li><b>Momentum (MACD 12,26,9):</b> histogram &gt; 0 and rising. Stronger if the MACD line is also above 0.</li>
+        <li><b>Timing (Stoch 14,3,3):</b> %K above %D after dipping below 50 (best from below 20). No new entries with %K &gt; 80.</li>
+      </ol>
+      <p><b>Execution:</b> buy on a break above the signal bar's high. <b>Stop:</b> below the nearest support under entry (−1σ band or 15-day swing low) less a 0.3% buffer; if the anchor is under 10 bars old, use the swing low and make the 15-day high the second target. <b>Size:</b> (capital × 1%) ÷ (entry − stop).</p>
+      <p><b>Selling:</b></p>
+      <ul>
+        <li>+1σ hit → take ⅓–½ off, move stop to entry.</li>
+        <li>+2σ hit → take the rest, or trail the stop under swing lows.</li>
+        <li>%K crosses below %D above 80 → tighten stop.</li>
+        <li>MACD histogram turns negative → exit remainder.</li>
+        <li>Close back below AVWAP after entry → exit (thesis failed).</li>
+        <li>No progress in 10 bars → exit.</li>
+      </ul>
+      <p><b>Setup B (mean reversion):</b> only when price is at or below −1σ. Entry needs the MACD histogram to turn positive with %K &gt; %D from below 20. Stop below the 15-day swing low. Targets −1σ, then AVWAP.</p>
+      <p><b>Status:</b> ENTRY = all 3 filters pass · WAIT = some pass · STAND ASIDE = below AVWAP and MACD histogram negative.</p>
+      <p class="meta">Rules-based screen only, not advice. Verify levels on your broker terminal before acting.</p>
+    </details>
   </div>
 </div>
 <div id="err">Chart library failed to load. Check your connection and reload.</div>
@@ -90,7 +125,7 @@ footer{color:var(--mut);font-size:11px;padding:0 18px 18px}
 <script>
 let RAW = null; // loaded from data.json (updated daily by GitHub Actions)
 const BANKS = [
-  {sym:'D05.SI', nm:'DBS', anchor:'2026-11-05', ev:'3Q26 results — 81¢ (66¢ ord + 15¢ capital return) declared, 5 Nov 2026'},
+  {sym:'D05.SI', nm:'DBS', anchor:'2026-11-05', note:'Ex-dividend 13 Nov 2026 (81¢): that close includes the dividend drop — add back ~0.81 when comparing with AVWAP.', ev:'3Q26 results — 81¢ (66¢ ord + 15¢ capital return) declared, 5 Nov 2026'},
   {sym:'O39.SI', nm:'OCBC', anchor:'2026-08-07', ev:'1H26 results — 47¢ interim declared, 7 Aug 2026'},
   {sym:'U11.SI', nm:'UOB', anchor:'2026-08-07', ev:'1H26 results — 88¢ interim declared, 7 Aug 2026'}
 ];
@@ -106,6 +141,66 @@ function sma(a,n){return a.map((v,i)=>{if(i<n-1||a.slice(i-n+1,i+1).some(x=>x==n
 function macd(c){const f=ema(c,12),s=ema(c,26);const m=c.map((_,i)=>f[i]-s[i]);const sg=ema(m,9);return c.map((_,i)=>i<25?null:{m:m[i],s:sg[i],h:m[i]-sg[i]})}
 function stoch(B){const raw=B.map((b,i)=>{if(i<13)return null;let hh=-1e9,ll=1e9;for(let j=i-13;j<=i;j++){hh=Math.max(hh,B[j].high);ll=Math.min(ll,B[j].low)}return hh===ll?50:100*(b.close-ll)/(hh-ll)});const k=sma(raw,3);const d=sma(k,3);return B.map((_,i)=>({k:k[i],d:d[i]}))}
 function avwap(B,a){let pv=0,v=0,pv2=0;return B.map(b=>{if(b.time<a)return null;const tp=(b.high+b.low+b.close)/3;pv+=tp*b.volume;v+=b.volume;pv2+=tp*tp*b.volume;const vw=pv/v;const sd=Math.sqrt(Math.max(pv2/v-vw*vw,0));return{vw,sd}})}
+
+/* ===== TRADING RULES ENGINE ===== */
+const R2=x=>Math.round(x*100)/100;
+function evalRules(sym){
+  const {B,M,S,A}=calc(sym);const n=B.length-1;const L=B[n],a=A[n],m=M[n],mp=M[n-1],s=S[n],sp=S[n-1];
+  if(!a||!m||s.k==null)return null;
+  const nAnc=n-A.findIndex(x=>x)+1;
+  const sw=B.slice(-15);const swLow=Math.min(...sw.map(r=>r.low)),swHigh=Math.max(...sw.map(r=>r.high));
+  const c=B.map(r=>r.close);const e12=ema(c,12),e26=ema(c,26),sg=ema(c.map((_,i)=>e12[i]-e26[i]),9);
+  const k12=2/13,k26=2/27;const Cx=(sg[n]-e12[n]*(1-k12)+e26[n]*(1-k26))/(k12-k26);
+  const kmin=Math.min(...S.slice(-5).map(x=>x.k));
+  const c1=L.close>a.vw, c2=m.h>0&&m.h>mp.h, c3=s.k>s.d&&s.k<80&&kmin<50;
+  const buf=p=>Math.max(0.01,R2(p*0.003));
+  const exits=[];
+  if(L.close>=a.vw+2*a.sd)exits.push('Close at/above +2σ → take remaining profit or trail stop under swing lows');
+  else if(L.close>=a.vw+a.sd)exits.push('Close at/above +1σ → take ⅓–½ profit, move stop to entry');
+  if(s.k<s.d&&sp.k>=sp.d&&sp.k>80)exits.push('%K crossed below %D above 80 → tighten stop');
+  if(m.h<0&&mp.h>=0)exits.push('MACD bearish cross today → exit remainder');
+  if(L.close<a.vw&&A[n-1]&&B[n-1].close>=A[n-1].vw)exits.push('Closed back below AVWAP → thesis invalid, exit');
+  let status,cls;
+  if(c1&&c2&&c3){status='ENTRY';cls='pos'}else if(!c1&&m.h<0){status='STAND ASIDE';cls='neg'}else{status='WAIT';cls='amb'}
+  const setups=[];
+  const mk=(name,entry,stop,t1,t2,trigger,inval)=>{const risk=entry-stop;setups.push({name,entry,stop,risk,t1,t2,r1:(t1-entry)/risk,r2:(t2-entry)/risk,trigger,inval})};
+  { // Setup A: trend / AVWAP
+    const entry=c1?L.high:a.vw;
+    const imm=nAnc<10;const sup=(imm?[swLow]:[a.vw-a.sd,swLow]).concat(c1&&!imm?[a.vw]:[]).filter(x=>x<entry);const ns=Math.max(...sup);const stop=ns-buf(ns);
+    let t1=a.vw+a.sd,t2=a.vw+2*a.sd;if(t1<=entry){t1=t2;t2=Math.max(swHigh,t1)}if(t2<=t1)t2=Math.max(swHigh,t1);if(imm)t2=Math.max(t2,swHigh);
+    mk('A · Trend (AVWAP)',entry,stop,t1,t2,
+      c1?`Above AVWAP. Buy on a break above today's high ${f2(L.high)} when MACD hist >0 &amp; rising and %K &gt; %D (all 3 filters).`
+        :`Daily close above AVWAP ${f2(a.vw)}, with MACD hist >0 &amp; rising and %K crossing above %D.`,
+      `Close back below AVWAP, or stop hit`);
+  }
+  if(L.close<=a.vw-a.sd){ // Setup B: mean reversion from lower bands
+    const entry=L.close,stop=swLow-buf(swLow);
+    mk('B · Mean reversion (lower band)',entry,stop,a.vw-a.sd,a.vw,
+      `Holding above −2σ ${f2(a.vw-2*a.sd)}. Confirm when MACD hist turns &gt;0${m.h<0?` (one-bar cross needs close ≈ ${f2(Cx)})`:''} and %K &gt; %D from below 20.`,
+      `Daily close below swing low ${f2(swLow)}`);
+  }
+  return {status,cls,c1,c2,c3,exits,setups,Cx,h:m.h,swLow,swHigh,nAnc,a,L,s,m};
+}
+function renderSetups(sym){
+  const b=BANKS.find(x=>x.sym===sym);const r=evalRules(sym);const el=document.getElementById('setups');
+  if(!r){el.innerHTML='';return}
+  const ck=v=>v?'<span class="pos">✓</span>':'<span class="neg">✗</span>';
+  const rr=x=>`<span class="${x>=1.5?'pos':x>=1?'':'neg'}">${x.toFixed(1)}R</span>`;
+  let h=`<div class="status ${r.cls}">${r.status}</div>
+  <div class="flt">Location (AVWAP) ${ck(r.c1)} · Momentum (MACD) ${ck(r.c2)} · Timing (STOCH) ${ck(r.c3)}</div>
+  <div class="note" style="margin-top:4px">${r.h<0?`MACD bull cross next bar needs close ≥ <b>${f2(r.Cx)}</b>`:`MACD stays bullish unless close &lt; <b>${f2(r.Cx)}</b>`} · 15-day swing low ${f2(r.swLow)} / high ${f2(r.swHigh)}</div>`;
+  if(r.nAnc<10)h+=`<div class="warn">⚠ Only ${r.nAnc} bars since anchor — bands are immature; treat σ targets with caution.</div>`;
+  if(b.note)h+=`<div class="warn">ℹ ${b.note}</div>`;
+  r.setups.forEach(s=>{h+=`<div class="setup"><div class="sn">${s.name}</div>
+    <div class="note" style="margin:2px 0 6px">${s.trigger}</div>
+    <table><tr><td>Entry</td><td>${f2(s.entry)}</td></tr><tr><td>Stop</td><td>${f2(s.stop)} <span class="meta">(risk ${f2(s.risk)} · ${(s.risk/s.entry*100).toFixed(1)}%)</span></td></tr>
+    <tr><td>Target 1</td><td>${f2(s.t1)} ${rr(s.r1)}</td></tr><tr><td>Target 2</td><td>${f2(s.t2)} ${rr(s.r2)}</td></tr>
+    <tr><td>Invalidation</td><td style="font-size:11px">${s.inval}</td></tr></table>
+    ${s.r1<1?`<div class="warn">Target 1 is below 1R — weak reward:risk; prefer waiting for a better entry.</div>`:''}
+    <div class="note">Size = (capital × 1%) ÷ ${f2(s.risk)}</div></div>`});
+  h+=`<div class="sn" style="margin-top:10px">Exit alerts (if holding)</div>`+(r.exits.length?r.exits.map(e=>`<div class="warn">${e}</div>`).join(''):'<div class="note">None triggered on the last bar.</div>');
+  el.innerHTML=h;
+}
 
 function calc(sym){const B=bars(sym);const c=B.map(b=>b.close);return{B,M:macd(c),S:stoch(B),A:avwap(B,anchors[sym])}}
 
@@ -125,7 +220,8 @@ function renderSummary(active){
     if(s.k!=null){if(s.k<20)tags.push(['Stoch oversold','pos']);else if(s.k>80)tags.push(['Stoch overbought','neg']);
       if(s.k>s.d&&sp.k<=sp.d)tags.push(['%K crossed ↑ %D','pos']);else if(s.k<s.d&&sp.k>=sp.d)tags.push(['%K crossed ↓ %D','neg']);}
     const d=document.createElement('div');d.className='card'+(b.sym===active?' on':'');
-    d.innerHTML=`<div class="t"><span class="nm">${b.nm} <span class="meta">${b.sym.replace('.SI','')}</span></span><span class="px">${f2(L.close)}</span></div>
+    const R=evalRules(b.sym);
+    d.innerHTML=`${R?`<span class="cstat status ${R.cls}">${R.status}</span>`:''}<div class="t"><span class="nm">${b.nm} <span class="meta">${b.sym.replace('.SI','')}</span></span><span class="px">${f2(L.close)}</span></div>
     <div class="${sgn(chg)}" style="text-align:right;font-variant-numeric:tabular-nums">${chg>=0?'+':''}${f2(chg)} (${pct>=0?'+':''}${pct.toFixed(2)}%)</div>
     <div class="kv"><span>AVWAP (${anchors[b.sym].slice(5)})</span><span>${a?f2(a.vw):'—'} <span class="${sgn(dist||0)}">${dist==null?'':(dist>=0?'+':'')+dist.toFixed(2)+'%'}</span></span>
     <span>MACD / Sig / Hist</span><span>${f3(m&&m.m)} / ${f3(m&&m.s)} / <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span></span>
@@ -169,7 +265,7 @@ show=function(sym){
   const kl=cs.addLineSeries({color:'#58a6ff',lineWidth:2,priceLineVisible:false});kl.setData(B.map((r,i)=>S[i].k!=null?{time:r.time,value:S[i].k}:{time:r.time}));
   const dl=cs.addLineSeries({color:'#ff9f43',lineWidth:1.5,priceLineVisible:false});dl.setData(B.map((r,i)=>S[i].d!=null?{time:r.time,value:S[i].d}:{time:r.time}));
   [80,20].forEach(p=>kl.createPriceLine({price:p,color:'#5a626d',lineWidth:1,lineStyle:2,axisLabelVisible:true}));
-  kl.applyOptions({autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})});
+  [kl,dl].forEach(x=>x.applyOptions({autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})}));cs.priceScale('right').applyOptions({scaleMargins:{top:0.06,bottom:0.06}});
   // sync
   let lock=false;charts.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(lock||!r)return;lock=true;charts.forEach(o=>o!==c&&o.timeScale().setVisibleLogicalRange(r));lock=false}));
   const n=B.length;cp.timeScale().setVisibleLogicalRange({from:n-130,to:n+3});
@@ -205,6 +301,7 @@ show=function(sym){
     let h='';let placed=false;rows.forEach(([k,v])=>{if(!placed&&L>=v){h+=`<tr class="cur"><td>Last close</td><td>${f2(L)}</td></tr>`;placed=true}h+=`<tr><td>${k}</td><td>${f2(v)} <span class="meta">(${((v/L-1)*100>=0?'+':'')}${((v/L-1)*100).toFixed(1)}%)</span></td></tr>`});
     if(!placed)h+=`<tr class="cur"><td>Last close</td><td>${f2(L)}</td></tr>`;
     document.getElementById('ladder').innerHTML=h;}
+  renderSetups(sym);
   renderSummary(sym);
 };
 
