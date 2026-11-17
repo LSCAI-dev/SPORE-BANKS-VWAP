@@ -1,5 +1,6 @@
 {"name": "Update bank data",
- "on": {"schedule": [{"cron": "20 10 * * 1-5"}], "workflow_dispatch": {}},
+ "on": {"schedule": [{"cron": "20 10 * * 1-5"}, {"cron": "50 12 * * 1-5"}, {"cron": "20 15 * * 1-5"}, {"cron": "20 23 * * 0-4"}],
+        "workflow_dispatch": {}},
  "permissions": {"contents": "write"},
  "concurrency": {"group": "update-data", "cancel-in-progress": false},
  "jobs": {"update": {"runs-on": "ubuntu-latest", "steps": [
