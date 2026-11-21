@@ -414,7 +414,7 @@ function cvdAnnotPlugin(series) {
       const { peakIdx, cvdArr, n } = series;
       const pp = meta.data[peakIdx];
       if (pp) {
-        ctx.fillStyle = 'var(--pu, #a78bfa)';
+        ctx.fillStyle = '#a78bfa';
         ctx.beginPath(); ctx.arc(pp.x, pp.y, 3.5, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = 'rgba(167,139,250,.65)'; ctx.textBaseline = 'bottom';
         const toRight = pp.x < ca.right - 65;
@@ -424,7 +424,7 @@ function cvdAnnotPlugin(series) {
       const lp = meta.data[n-1];
       if (lp) {
         const lv = cvdArr[n-1];
-        ctx.fillStyle = 'var(--pu, #a78bfa)';
+        ctx.fillStyle = '#a78bfa';
         ctx.beginPath(); ctx.arc(lp.x, lp.y, 3.5, 0, Math.PI*2); ctx.fill();
         ctx.fillStyle = 'rgba(167,139,250,.72)'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
         ctx.fillText((lv >= 0 ? '+' : '') + lv.toFixed(2) + 'M', lp.x-7, lp.y);
@@ -673,7 +673,9 @@ function render() {
   const meta = TICKERS[currentTicker];
   document.title = `${meta.code} — Anchored CVD · Delta%`;
   updateStats(series);
-  buildCharts(series);
+  // Defer chart build by one rAF so the browser has painted the now-visible
+  // containers and Chart.js can read their real pixel dimensions.
+  requestAnimationFrame(() => buildCharts(series));
 
   const upd = DATA.updated ? new Date(DATA.updated).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', hour12: false }) : '—';
   $('asof').textContent = `Data as of ${upd} SGT`;
