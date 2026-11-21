@@ -84,7 +84,11 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
 <body>
 <header>
   <h1>Singapore Banks — Anchored VWAP · MACD (12,26,9) · Stochastic (14,3,3)</h1>
-  <div class="meta"><span id="asof">Loading data…</span> <button id="reload" style="margin-left:6px">↻ Reload data</button></div>
+  <div class="meta" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+  <span id="asof">Loading data…</span>
+  <button id="reload">↻ Reload data</button>
+  <a href="cvd.html" style="color:var(--acc);text-decoration:none;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:3px 9px;white-space:nowrap">📊 Anchored CVD · Δ%</a>
+</div>
 </header>
 <div class="summary" id="summary"></div>
 <div class="main">
