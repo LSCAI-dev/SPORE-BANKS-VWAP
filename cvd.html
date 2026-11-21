@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SG Banks CVD">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<title>SG Banks — Anchored CVD · Delta%</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:    #0e1117;
+  --panel: #161b22;
+  --line:  #262c36;
+  --tx:    #e6edf3;
+  --mut:   #8b949e;
+  --up:    #26a69a;
+  --dn:    #ef5350;
+  --av:    #f5b400;
+  --acc:   #58a6ff;
+  --pu:    #a78bfa;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  background:var(--bg);color:var(--tx);
+  font:13px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  min-height:100dvh;
+}
+
+/* ── header ── */
+header{padding:14px 18px 8px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:baseline;border-bottom:1px solid var(--line)}
+.nav-back{color:var(--acc);text-decoration:none;font-size:12px;white-space:nowrap}
+.nav-back:hover{text-decoration:underline}
+h1{font-size:16px;margin:0;font-weight:600;flex:1}
+.meta{color:var(--mut);font-size:12px}
+
+/* ── controls ── */
+.controls{display:flex;flex-wrap:wrap;gap:8px 14px;padding:10px 18px;align-items:flex-end;border-bottom:1px solid var(--line)}
+.ctrl-group{display:flex;flex-direction:column;gap:4px}
+.ctrl-group label{font-size:11px;color:var(--mut);font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{
+  background:transparent;color:var(--mut);border:none;padding:5px 12px;
+  cursor:pointer;font-size:12px;font-weight:500;transition:background .15s,color .15s;
+}
+.seg button.on{background:var(--acc);color:#0e1117}
+.seg button:not(.on):hover{background:#21262d;color:var(--tx)}
+input.anc{
+  background:#161b22;color:var(--tx);border:1px solid var(--line);border-radius:6px;
+  padding:5px 9px;font:15px ui-monospace,Menlo,Consolas,monospace;width:138px;
+}
+input.anc:focus{outline:none;border-color:var(--acc)}
+input.anc.bad{border-color:var(--dn)}
+button.go{
+  background:#1f6feb;color:#fff;border:1px solid #1f6feb;border-radius:6px;
+  padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;
+}
+button.go:hover{background:#388bfd}
+.src-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:11px;color:var(--mut);padding:4px 8px;
+  border:1px solid var(--line);border-radius:4px;align-self:flex-end;
+}
+.src-dot{width:7px;height:7px;border-radius:50%;flex:none}
+.src-real .src-dot{background:var(--up)}
+.src-est  .src-dot{background:var(--av)}
+
+/* ── stats strip ── */
+.stats{display:flex;flex-wrap:wrap;gap:4px 20px;padding:8px 18px;border-bottom:1px solid var(--line)}
+.stat{display:flex;flex-direction:column;gap:1px}
+.stat-l{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.stat-v{font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,Consolas,monospace}
+.up{color:var(--up)}.dn{color:var(--dn)}.pu{color:var(--pu)}.muted{color:var(--mut)}
+
+/* ── chart panels ── */
+.charts{padding:10px 18px 0}
+.panel-label{
+  display:flex;gap:10px;align-items:center;
+  font-size:11px;color:var(--mut);padding:4px 0 3px;
+}
+.pl-name{font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.pl-sub{font-size:10.5px}
+.chart-wrap{position:relative;width:100%}
+#cvdWrap {height:260px;margin-bottom:2px}
+#dltWrap {height:140px}
+canvas{display:block}
+
+/* ── threshold legend ── */
+.thresh-block{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;
+  padding:10px 18px;border-top:1px solid var(--line);margin-top:4px;
+}
+.thresh-panel h4{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin:0 0 6px}
+.trow{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--mut);margin-bottom:3px}
+.tline{flex:none;height:0;width:16px}
+.tval{font-family:ui-monospace,Menlo,Consolas,monospace;min-width:44px;font-size:11px}
+
+/* ── tooltip ── */
+#tip{
+  position:fixed;pointer-events:none;
+  background:var(--panel);border:1px solid var(--line);border-radius:6px;
+  padding:8px 10px;font:12px/1.6 ui-monospace,Menlo,Consolas,monospace;
+  font-variant-numeric:tabular-nums;opacity:0;transition:opacity .07s;z-index:200;
+  min-width:160px;
+}
+
+/* ── footer ── */
+footer{color:var(--mut);font-size:11px;padding:10px 18px 20px;border-top:1px solid var(--line);margin-top:4px}
+
+/* ── loading / error ── */
+#loading{padding:40px 18px;color:var(--mut);font-size:13px}
+#err{display:none;padding:20px 18px;color:var(--dn)}
+
+@media(max-width:600px){
+  .thresh-block{grid-template-columns:1fr}
+  #cvdWrap{height:200px}
+  #dltWrap{height:110px}
+}
+</style>
+</head>
+<body>
+<header>
+  <a class="nav-back" href="index.html">← AVWAP · MACD · Stoch</a>
+  <h1>Anchored CVD · Session Δ%</h1>
+  <div class="meta" id="asof">Loading…</div>
+</header>
+
+<div class="controls">
+  <div class="ctrl-group">
+    <label>Bank</label>
+    <div class="seg" id="tickerSeg">
+      <button data-t="D05.SI" class="on">DBS</button>
+      <button data-t="O39.SI">OCBC</button>
+      <button data-t="U11.SI">UOB</button>
+    </div>
+  </div>
+  <div class="ctrl-group">
+    <label>AVWAP anchor</label>
+    <input type="text" id="ancIn" class="anc" inputmode="numeric" maxlength="10"
+           autocomplete="off" placeholder="YYYY-MM-DD">
+  </div>
+  <button class="go" id="goBtn">Update</button>
+  <div class="src-badge src-est" id="srcBadge">
+    <div class="src-dot"></div>
+    <span id="srcTxt">CLV estimate</span>
+  </div>
+</div>
+
+<div class="stats" id="statsRow">
+  <div class="stat"><div class="stat-l">Total CVD</div><div class="stat-v pu" id="sTotalCvd">—</div></div>
+  <div class="stat"><div class="stat-l">Last Δ%</div><div class="stat-v" id="sLastDelta">—</div></div>
+  <div class="stat"><div class="stat-l">Last Ask%</div><div class="stat-v" id="sLastAsk">—</div></div>
+  <div class="stat"><div class="stat-l">CVD Peak</div><div class="stat-v pu" id="sPeak">—</div></div>
+  <div class="stat"><div class="stat-l">Days</div><div class="stat-v muted" id="sDays">—</div></div>
+  <div class="stat"><div class="stat-l">Last Price</div><div class="stat-v" id="sPrice">—</div></div>
+</div>
+
+<div id="loading">Loading data…</div>
+<div id="err"></div>
+
+<div id="mainContent" style="display:none">
+<div class="charts">
+  <div class="panel-label">
+    <span class="pl-name" style="color:var(--pu)">▪ Anchored CVD</span>
+    <span class="pl-sub">cumulative net vol since anchor · M shares · Σ(AskVol − BidVol)</span>
+  </div>
+  <div class="chart-wrap" id="cvdWrap"><canvas id="cvdCanvas"></canvas></div>
+
+  <div class="panel-label" style="margin-top:8px">
+    <span class="pl-name" style="color:var(--up)">▪</span>
+    <span class="pl-name" style="color:var(--dn)">▪</span>
+    <span class="pl-sub">Session Δ% = (AskVol − BidVol) / TotalVol × 100 &nbsp;≡&nbsp; 2 × Ask% − 100</span>
+  </div>
+  <div class="chart-wrap" id="dltWrap"><canvas id="dltCanvas"></canvas></div>
+</div>
+
+<div class="thresh-block">
+  <div class="thresh-panel">
+    <h4>Anchored CVD thresholds</h4>
+    <div class="trow">
+      <div class="tline" style="border-top:1.5px dashed rgba(167,139,250,0.55)"></div>
+      <span class="tval pu" id="tPeak">—</span>
+      <span>Observed CVD peak since anchor</span>
+    </div>
+    <div class="trow">
+      <div class="tline" style="border-top:1px dashed rgba(239,83,80,0.4)"></div>
+      <span class="tval muted">0</span>
+      <span>Sellers have fully absorbed net buying since anchor</span>
+    </div>
+  </div>
+  <div class="thresh-panel">
+    <h4>Session Δ% thresholds — buyer / seller power</h4>
+    <div class="trow">
+      <div class="tline" style="border-top:1.5px dashed rgba(38,166,154,0.6)"></div>
+      <span class="tval up">+40%</span>
+      <span>Heavy buying — ask vol &gt; 70%</span>
+    </div>
+    <div class="trow">
+      <div class="tline" style="border-top:1px dashed rgba(38,166,154,0.4)"></div>
+      <span class="tval up">+20%</span>
+      <span>Notable buying — ask vol &gt; 60%</span>
+    </div>
+    <div class="trow">
+      <div class="tline" style="border-top:1px dashed rgba(230,237,243,0.2)"></div>
+      <span class="tval muted">0%</span>
+      <span>Balanced</span>
+    </div>
+    <div class="trow">
+      <div class="tline" style="border-top:1px dashed rgba(239,83,80,0.4)"></div>
+      <span class="tval dn">−20%</span>
+      <span>Notable selling — bid vol &gt; 60%</span>
+    </div>
+    <div class="trow">
+      <div class="tline" style="border-top:1.5px dashed rgba(239,83,80,0.6)"></div>
+      <span class="tval dn">−40%</span>
+      <span>Heavy selling — bid vol &gt; 70%</span>
+    </div>
+  </div>
+</div>
+</div><!-- #mainContent -->
+
+<footer>
+  <span id="footerNote">Δ% estimated from close position in day's range (CLV method).
+  For real bid/ask split, drop broker time &amp; sales CSV into <code>tns/</code> and run
+  <code>python scripts/import_tns.py</code>.</span>
+</footer>
+
+<div id="tip"></div>
+
+<script>
+'use strict';
+
+// ── helpers ────────────────────────────────────────────────────────────────
+const TICKERS = {
+  'D05.SI': { code: 'D05', name: 'DBS Group',  defaultAnchor: '2026-04-29' },
+  'O39.SI': { code: 'O39', name: 'OCBC Bank',  defaultAnchor: '2026-04-29' },
+  'U11.SI': { code: 'U11', name: 'UOB',        defaultAnchor: '2026-04-29' },
+};
+
+const $ = id => document.getElementById(id);
+
+function fmtShort(ts) {
+  const d = new Date(ts * 1000);
+  return d.toLocaleDateString('en-SG', { day:'2-digit', month:'short', timeZone:'Asia/Singapore' });
+}
+function fmtFull(ts) {
+  const d = new Date(ts * 1000);
+  return d.toLocaleDateString('en-SG', { day:'2-digit', month:'short', year:'numeric', timeZone:'Asia/Singapore' });
+}
+function fmtDate(ts) {
+  const d = new Date(ts * 1000);
+  return d.toISOString().slice(0, 10);  // YYYY-MM-DD in UTC (== SGT date for trading hours)
+}
+function anchorTs(str) {
+  // Parse YYYY-MM-DD → midnight UTC timestamp (matches data.json convention)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return null;
+  const t = Date.UTC(...str.split('-').map((v,i) => i === 1 ? +v - 1 : +v)) / 1000;
+  return isNaN(t) ? null : t;
+}
+function clv(o, h, l, c) {
+  const rng = h - l;
+  if (rng === 0) return 0.5;
+  return Math.min(0.97, Math.max(0.03, (c - l) / rng));
+}
+
+// ── state ──────────────────────────────────────────────────────────────────
+let DATA = null;        // data.json
+let DELTA = null;       // delta.json (may be null)
+let cvdChart = null;
+let dltChart = null;
+let currentTicker = 'D05.SI';
+let currentAnchor = '';
+
+// ── load data ──────────────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    DATA = await fetch('data.json').then(r => { if (!r.ok) throw r; return r.json(); });
+  } catch(e) {
+    showErr('Failed to load data.json: ' + e);
+    return false;
+  }
+  try {
+    DELTA = await fetch('delta.json').then(r => r.ok ? r.json() : null).catch(() => null);
+  } catch(e) { DELTA = null; }
+  return true;
+}
+
+function showErr(msg) {
+  $('loading').style.display = 'none';
+  $('err').style.display = '';
+  $('err').textContent = msg;
+}
+
+// ── compute chart data ─────────────────────────────────────────────────────
+function buildSeries(ticker, anchorTs_) {
+  const bars = (DATA.symbols || {})[ticker] || [];
+  const deltaMap = ((DELTA || {}).symbols || {})[ticker] || {};
+
+  // Filter to anchor date
+  const filtered = bars.filter(b => b[0] >= anchorTs_);
+  if (!filtered.length) return null;
+
+  const labels   = [];
+  const datesFull = [];
+  const cvdArr   = [];
+  const dpctArr  = [];
+  const askFracArr = [];
+  let cvdRun     = 0;
+  let realCount  = 0;
+
+  for (const bar of filtered) {
+    const [ts, o, h, l, c, vol] = bar;
+    const dateStr = fmtDate(ts);
+
+    let askFrac, deltaAbs;
+    const dEntry = deltaMap[dateStr];
+    if (dEntry && (dEntry[0] + dEntry[1]) > 0) {
+      // Real broker T&S data
+      const ask = dEntry[0], bid = dEntry[1];
+      askFrac  = ask / (ask + bid);
+      deltaAbs = (ask - bid) / 1e6;
+      realCount++;
+    } else {
+      // CLV estimate
+      askFrac  = clv(o, h, l, c);
+      deltaAbs = (2 * askFrac - 1) * vol / 1e6;
+    }
+
+    cvdRun  += deltaAbs;
+    const dp = (2 * askFrac - 1) * 100;
+
+    labels.push(fmtShort(ts));
+    datesFull.push(fmtFull(ts));
+    cvdArr.push(parseFloat(cvdRun.toFixed(3)));
+    dpctArr.push(parseFloat(dp.toFixed(1)));
+    askFracArr.push(parseFloat(askFrac.toFixed(3)));
+  }
+
+  const lastBar = filtered[filtered.length - 1];
+  const cvdMax  = Math.max(...cvdArr);
+  const peakIdx = cvdArr.indexOf(cvdMax);
+
+  return {
+    labels, datesFull, cvdArr, dpctArr, askFracArr,
+    n: filtered.length, realCount,
+    lastPrice: lastBar[4],
+    lastTs:    lastBar[0],
+    cvdMax, peakIdx,
+  };
+}
+
+// ── theme-matched threshold plugin (Chart.js) ──────────────────────────────
+let plugN = 0;
+function threshPlugin(thresholds) {
+  return {
+    id: 'thresh_' + (++plugN),
+    beforeDatasetsDraw(chart) {
+      const { ctx, chartArea: ca, scales } = chart;
+      if (!ca || !scales.y) return;
+      const sc = scales.y;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(ca.left, ca.top, ca.width, ca.height); ctx.clip();
+      thresholds.forEach(t => {
+        const y = sc.getPixelForValue(t.v);
+        if (t.fillA) { ctx.fillStyle = t.fillA; ctx.fillRect(ca.left, ca.top, ca.width, Math.max(0, y - ca.top)); }
+        if (t.fillB) {
+          ctx.fillStyle = t.fillB;
+          const y0 = Math.max(ca.top, y);
+          ctx.fillRect(ca.left, y0, ca.width, ca.bottom - y0);
+        }
+      });
+      thresholds.forEach(t => {
+        if (!t.color) return;
+        const y = sc.getPixelForValue(t.v);
+        if (y < ca.top - 1 || y > ca.bottom + 1) return;
+        ctx.beginPath(); ctx.strokeStyle = t.color; ctx.lineWidth = t.w || 1;
+        ctx.setLineDash(t.dash || []);
+        ctx.moveTo(ca.left, y); ctx.lineTo(ca.right, y);
+        ctx.stroke(); ctx.setLineDash([]);
+      });
+      ctx.restore();
+      ctx.save(); ctx.font = '9px ui-monospace,Menlo,Consolas,monospace';
+      ctx.textBaseline = 'bottom'; ctx.textAlign = 'right';
+      thresholds.forEach(t => {
+        if (!t.label) return;
+        const y = sc.getPixelForValue(t.v);
+        if (y < ca.top + 10 || y > ca.bottom - 2) return;
+        ctx.fillStyle = t.lc || 'rgba(230,237,243,.4)';
+        ctx.fillText(t.label, ca.right - 4, y - 2);
+      });
+      ctx.restore();
+    }
+  };
+}
+
+// CVD peak + last-value annotation plugin
+function cvdAnnotPlugin(series) {
+  return {
+    id: 'cvdAnnot_' + (++plugN),
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea: ca } = chart;
+      if (!ca) return;
+      const meta = chart.getDatasetMeta(0);
+      if (!meta?.data?.length) return;
+      ctx.save(); ctx.font = '9px ui-monospace,Menlo,Consolas,monospace';
+      const { peakIdx, cvdArr, n } = series;
+      const pp = meta.data[peakIdx];
+      if (pp) {
+        ctx.fillStyle = 'var(--pu, #a78bfa)';
+        ctx.beginPath(); ctx.arc(pp.x, pp.y, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(167,139,250,.65)'; ctx.textBaseline = 'bottom';
+        const toRight = pp.x < ca.right - 65;
+        ctx.textAlign = toRight ? 'left' : 'right';
+        ctx.fillText('Peak', toRight ? pp.x+6 : pp.x-6, pp.y-3);
+      }
+      const lp = meta.data[n-1];
+      if (lp) {
+        const lv = cvdArr[n-1];
+        ctx.fillStyle = 'var(--pu, #a78bfa)';
+        ctx.beginPath(); ctx.arc(lp.x, lp.y, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(167,139,250,.72)'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+        ctx.fillText((lv >= 0 ? '+' : '') + lv.toFixed(2) + 'M', lp.x-7, lp.y);
+      }
+      ctx.restore();
+    }
+  };
+}
+
+// ── build / update charts ──────────────────────────────────────────────────
+function buildCharts(series) {
+  if (cvdChart) { cvdChart.destroy(); cvdChart = null; }
+  if (dltChart) { dltChart.destroy(); dltChart = null; }
+
+  const { labels, cvdArr, dpctArr, n, cvdMax } = series;
+
+  // Peak CVD threshold: round up to nearest 25M
+  const peakLevel = Math.ceil(cvdMax / 25) * 25 || 25;
+
+  // Bar colors for Delta%
+  const barColors  = dpctArr.map(d => d >= 0 ? 'rgba(38,166,154,0.72)' : 'rgba(239,83,80,0.72)');
+  const barBorders = dpctArr.map(d => d >= 0 ? '#26a69a' : '#ef5350');
+  // Highlight last bar
+  barColors[n-1]  = dpctArr[n-1] >= 0 ? 'rgba(38,166,154,0.95)' : 'rgba(239,83,80,0.95)';
+
+  // CVD y-axis range
+  const cvdMin = Math.min(0, ...cvdArr);
+  const cvdPad = Math.max(10, (Math.max(...cvdArr) - cvdMin) * 0.1);
+  const yMax = parseFloat((Math.max(...cvdArr) + cvdPad).toFixed(0));
+  const yMin = parseFloat((cvdMin - cvdPad / 2).toFixed(0));
+
+  const baseScale = {
+    x: {
+      grid: { color: 'rgba(38,42,54,.7)' }, border: { display: false },
+      ticks: { color: '#8b949e', font: { family: 'ui-monospace,Menlo,Consolas,monospace', size: 9 },
+               maxRotation: 0, autoSkip: true, maxTicksLimit: 10 }
+    }
+  };
+
+  cvdChart = new Chart(
+    document.getElementById('cvdCanvas').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{ label: 'Anchored CVD', data: cvdArr,
+          borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.07)',
+          fill: true, borderWidth: 1.8,
+          pointRadius: 0, pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#a78bfa',
+          pointHoverBorderColor: '#0e1117', pointHoverBorderWidth: 1.5,
+          tension: 0.2 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 400 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          ...baseScale,
+          y: {
+            min: yMin, max: yMax,
+            grid: { color: 'rgba(38,42,54,.7)' }, border: { display: false },
+            ticks: { color: 'rgba(167,139,250,0.6)',
+                     font: { family: 'ui-monospace,Menlo,Consolas,monospace', size: 9 },
+                     callback: v => v.toFixed(0) + 'M', maxTicksLimit: 6 }
+          }
+        }
+      },
+      plugins: [
+        threshPlugin([
+          { v: peakLevel, color: 'rgba(167,139,250,0.4)', w: 1.5, dash:[6,4],
+            label: '+'+peakLevel+'M peak', lc: 'rgba(167,139,250,.55)' },
+          { v: 0, fillB: 'rgba(239,83,80,0.05)',
+            color: 'rgba(239,83,80,0.4)', dash:[3,4],
+            label: 'CVD 0', lc: 'rgba(239,83,80,.5)' },
+        ]),
+        cvdAnnotPlugin(series)
+      ]
+    }
+  );
+
+  dltChart = new Chart(
+    document.getElementById('dltCanvas').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{ label: 'Session Δ%', data: dpctArr,
+          backgroundColor: barColors, borderColor: barBorders,
+          borderWidth: 0.5, barPercentage: 0.88, categoryPercentage: 1.0 }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: { duration: 400 },
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: {
+          ...baseScale,
+          y: {
+            min: -75, max: 60,
+            grid: { color: 'rgba(38,42,54,.7)' }, border: { display: false },
+            ticks: { color: '#8b949e',
+                     font: { family: 'ui-monospace,Menlo,Consolas,monospace', size: 9 },
+                     callback: v => (v > 0 ? '+' : '') + v + '%', maxTicksLimit: 6 }
+          }
+        }
+      },
+      plugins: [
+        threshPlugin([
+          { v: 40, fillA: 'rgba(38,166,154,0.06)', color: 'rgba(38,166,154,0.6)', w:1.5, dash:[6,4],
+            label: '+40%', lc: 'rgba(38,166,154,.65)' },
+          { v: 20, fillA: 'rgba(38,166,154,0.03)', color: 'rgba(38,166,154,0.4)', dash:[4,4],
+            label: '+20%', lc: 'rgba(38,166,154,.5)' },
+          { v: 0, color: 'rgba(230,237,243,0.18)', dash:[2,4] },
+          { v:-20, fillB: 'rgba(239,83,80,0.03)', color: 'rgba(239,83,80,0.4)', dash:[4,4],
+            label: '−20%', lc: 'rgba(239,83,80,.5)' },
+          { v:-40, fillB: 'rgba(239,83,80,0.06)', color: 'rgba(239,83,80,0.6)', w:1.5, dash:[6,4],
+            label: '−40%', lc: 'rgba(239,83,80,.65)' },
+        ])
+      ]
+    }
+  );
+
+  hookHover();
+}
+
+// ── tooltip + synchronized hover ───────────────────────────────────────────
+let _series = null;
+const tipEl = $('tip');
+
+function cvdZone(v) {
+  if (v > 0) return v >= 50 ? 'Strong accumulation' : 'Mild buyer bias';
+  return v <= -50 ? 'Heavy distribution' : 'Net selling since anchor';
+}
+function sessionLabel(dp) {
+  if (dp >= 40)  return '🟢 Heavy buying';
+  if (dp >= 20)  return '🟢 Strong buying';
+  if (dp > 0)    return '↑ Net buying';
+  if (dp > -20)  return '↓ Net selling';
+  if (dp > -40)  return '🔴 Strong selling';
+  return '🔴 Heavy selling';
+}
+
+function updateTip(idx, px, py) {
+  if (!_series || idx < 0 || idx >= _series.n) { tipEl.style.opacity='0'; return; }
+  const cv = _series.cvdArr[idx], dp = _series.dpctArr[idx];
+  const ask = (100 + dp) / 2;
+  const dColor = dp >= 0 ? '#26a69a' : '#ef5350';
+  tipEl.innerHTML =
+    `<div style="color:#8b949e;font-size:10.5px;margin-bottom:4px">${_series.datesFull[idx]}</div>` +
+    `<div style="color:#a78bfa">CVD ${cv >= 0 ? '+' : ''}${cv.toFixed(2)}M</div>` +
+    `<div style="color:#8b949e;font-size:10.5px;margin-bottom:3px">${cvdZone(cv)}</div>` +
+    `<div style="color:${dColor}">Δ% ${dp >= 0 ? '+' : ''}${dp.toFixed(1)}%</div>` +
+    `<div style="color:${dColor};font-size:10.5px">Ask ${ask.toFixed(0)}% / Bid ${(100-ask).toFixed(0)}%</div>` +
+    `<div style="color:#8b949e;font-size:10.5px">${sessionLabel(dp)}</div>`;
+  tipEl.style.opacity = '1';
+  const tw=165, th=108;
+  let tx=px+14, ty=py-55;
+  if (tx+tw > window.innerWidth-8)  tx = px-tw-10;
+  if (ty < 8) ty = 8;
+  if (ty+th > window.innerHeight-8) ty = window.innerHeight-th-8;
+  tipEl.style.left = tx+'px';
+  tipEl.style.top  = ty+'px';
+}
+
+function syncAll(idx) {
+  [cvdChart, dltChart].forEach(ch => {
+    if (!ch) return;
+    if (idx >= 0) {
+      ch.setActiveElements([{ datasetIndex:0, index:idx }]);
+      ch.tooltip.setActiveElements([{ datasetIndex:0, index:idx }],{x:0,y:0});
+    } else {
+      ch.setActiveElements([]); ch.tooltip.setActiveElements([],{x:0,y:0});
+    }
+    ch.update('none');
+  });
+}
+
+function getIdx(canvas, chart, cx) {
+  const ca = chart.chartArea; if (!ca) return -1;
+  const x = cx - canvas.getBoundingClientRect().left;
+  if (x < ca.left || x > ca.right) return -1;
+  const idx = Math.round(chart.scales.x.getValueForPixel(x));
+  return (idx >= 0 && idx < _series.n) ? idx : -1;
+}
+
+function hookHover() {
+  [[document.getElementById('cvdCanvas'), cvdChart],
+   [document.getElementById('dltCanvas'), dltChart]].forEach(([canvas, chart]) => {
+    canvas.addEventListener('mousemove', e => {
+      const idx = getIdx(canvas, chart, e.clientX);
+      updateTip(idx, e.pageX, e.pageY); syncAll(idx);
+    });
+    canvas.addEventListener('mouseleave', () => { updateTip(-1); syncAll(-1); });
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const t = e.touches[0];
+      const idx = getIdx(canvas, chart, t.clientX);
+      updateTip(idx, t.pageX, t.pageY); syncAll(idx);
+    }, { passive: false });
+    canvas.addEventListener('touchend', () => { updateTip(-1); syncAll(-1); });
+  });
+}
+
+// ── update stats strip ─────────────────────────────────────────────────────
+function updateStats(series) {
+  _series = series;
+  const { cvdArr, dpctArr, askFracArr, n, cvdMax, lastPrice, realCount } = series;
+  const totalCvd = cvdArr[n-1], lastDp = dpctArr[n-1], lastAsk = askFracArr[n-1] * 100;
+  const color = v => v >= 0 ? 'up' : 'dn';
+
+  $('sTotalCvd').textContent = (totalCvd >= 0 ? '+' : '') + totalCvd.toFixed(2) + 'M';
+  $('sLastDelta').textContent = (lastDp >= 0 ? '+' : '') + lastDp.toFixed(1) + '%';
+  $('sLastDelta').className = 'stat-v ' + color(lastDp);
+  $('sLastAsk').textContent  = lastAsk.toFixed(0) + '%';
+  $('sLastAsk').className    = 'stat-v ' + color(lastAsk - 50);
+  $('sPeak').textContent     = '+' + cvdMax.toFixed(2) + 'M';
+  $('sDays').textContent     = n;
+  $('sPrice').textContent    = 'S$' + lastPrice.toFixed(3);
+  $('tPeak').textContent     = '+' + (Math.ceil(cvdMax/25)*25) + 'M';
+
+  const hasReal = realCount > 0;
+  const badge = $('srcBadge');
+  badge.className = 'src-badge ' + (hasReal ? 'src-real' : 'src-est');
+  $('srcTxt').textContent = hasReal
+    ? `${realCount}/${n} days real T&S`
+    : 'CLV estimate';
+  $('footerNote').textContent = hasReal
+    ? `${realCount} of ${n} sessions use real broker time & sales data. Remaining ${n - realCount} sessions use CLV (close position in day's range) as an estimate of ask/bid split.`
+    : `Δ% estimated from close position in day's range (CLV method). For real bid/ask split, drop broker time & sales CSV into tns/ and run python scripts/import_tns.py.`;
+}
+
+// ── render ─────────────────────────────────────────────────────────────────
+function render() {
+  const ancStr = $('ancIn').value.trim();
+  const ancTs  = anchorTs(ancStr);
+  if (!ancTs) { $('ancIn').classList.add('bad'); return; }
+  $('ancIn').classList.remove('bad');
+  currentAnchor = ancStr;
+
+  const series = buildSeries(currentTicker, ancTs);
+  if (!series || !series.n) {
+    showErr('No data for the selected ticker / anchor date combination.');
+    return;
+  }
+
+  $('loading').style.display = 'none';
+  $('mainContent').style.display = '';
+  const meta = TICKERS[currentTicker];
+  document.title = `${meta.code} — Anchored CVD · Delta%`;
+  updateStats(series);
+  buildCharts(series);
+
+  const upd = DATA.updated ? new Date(DATA.updated).toLocaleString('en-SG', { timeZone: 'Asia/Singapore', hour12: false }) : '—';
+  $('asof').textContent = `Data as of ${upd} SGT`;
+}
+
+// ── init ───────────────────────────────────────────────────────────────────
+(async () => {
+  const ok = await loadData();
+  if (!ok) return;
+
+  // Set default ticker and anchor
+  currentTicker = 'D05.SI';
+  const defAnchor = TICKERS[currentTicker].defaultAnchor;
+
+  // Pick an anchor: either a sensible recent anchor or the earliest available bar
+  const bars = (DATA.symbols || {})[currentTicker] || [];
+  const oneYearAgo = new Date(); oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  const oya = Math.floor(oneYearAgo / 1000);
+  const anchorBar = bars.find(b => b[0] >= oya) || bars[0];
+  const computedAnchor = anchorBar
+    ? new Date(anchorBar[0] * 1000).toISOString().slice(0, 10)
+    : defAnchor;
+
+  $('ancIn').value = computedAnchor;
+  currentAnchor = computedAnchor;
+
+  // Wire controls
+  document.querySelectorAll('#tickerSeg button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#tickerSeg button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      currentTicker = btn.dataset.t;
+      render();
+    });
+  });
+  $('goBtn').addEventListener('click', render);
+  $('ancIn').addEventListener('keydown', e => { if (e.key === 'Enter') render(); });
+
+  render();
+})();
+</script>
+</body>
+</html>
