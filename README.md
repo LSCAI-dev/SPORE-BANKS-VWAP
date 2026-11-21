@@ -103,6 +103,16 @@ const BANKS = [
 
 ---
 
+## Order flow panel (ask/bid volume, anchored CVD)
+
+The panel under the price chart shows each day's **delta** (ask volume − bid volume) and the **anchored CVD** (delta summed from the same anchor as the AVWAP). The side panel's **Order flow vs AVWAP** box reads the AVWAP × CVD matrix, flags AVWAP tests, and flags 10-day CVD divergences.
+
+- **Without time & sales data**, each day is *estimated*: ask share = (C−L)/(H−L). Those bars are drawn faded.
+- **With time & sales data**, the split is real. Export a day's time & sales from your broker as CSV and name it `D05_2026-11-20.csv` (`O39_…` OCBC, `U11_…` UOB). Upload it into a `tns/` folder (**Add file → Upload files**, then type `tns/` in front of the name). The next Action run (or `python scripts/import_tns.py`) writes `delta.json`, and those days are drawn solid.
+- The importer uses the best method in each file: a side/B-S column, then bid/ask quote columns, then the tick rule. Auction prints (before 09:00 and from 17:00) are excluded.
+
+---
+
 ## Run it on your own PC (optional)
 
 ```bash

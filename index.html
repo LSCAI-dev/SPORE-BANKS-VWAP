@@ -85,7 +85,8 @@ details.rules ol,details.rules ul{padding-left:18px;margin:4px 0}
 <div class="main">
   <div class="charts">
     <div class="pane-l" id="lgP"></div><div id="cP"></div>
-    <div class="pane-l" style="padding-top:0"><span><span class="pos">■</span> est. ask (buy) volume</span><span><span class="neg">■</span> est. bid (sell) volume</span><span>— split by close position in day's range; not true tick-level bid/ask data</span></div>
+    <div class="pane-l" style="padding-top:0"><span><span class="pos">■</span> est. ask (buy) volume</span><span><span class="neg">■</span> est. bid (sell) volume</span><span id="volSrc">— split by close position in day's range; not true tick-level bid/ask data</span></div>
+    <div class="pane-l" id="lgD"></div><div id="cD"></div>
     <div class="pane-l" id="lgM"></div><div id="cM"></div>
     <div class="pane-l" id="lgS"></div><div id="cS"></div>
   </div>
@@ -105,6 +106,8 @@ details.rules ol,details.rules ul{padding-left:18px;margin:4px 0}
     <h3 style="margin-top:14px">AVWAP level ladder</h3>
     <table id="ladder"></table>
     <div class="note">Bands = AVWAP ± volume-weighted std. dev. of typical price since anchor.</div>
+    <h3 style="margin-top:14px">Order flow vs AVWAP</h3>
+    <div id="flow"></div>
     <h3 style="margin-top:14px">Trade setup</h3>
     <div id="setups"></div>
     <details class="rules"><summary>Trading rules</summary>
@@ -196,8 +199,37 @@ function renderHistory(sym){
 /* ===== ESTIMATED ASK / BID VOLUME =====
    Daily bars carry no trade-side data, so volume is split by close location within the day's range:
    ask (buy) share = (Close - Low) / (High - Low); bid (sell) share = 1 - that. Doji with H = L -> 50/50. */
-function splitVol(r){const g=r.high-r.low;const f=g>0?(r.close-r.low)/g:0.5;return{buy:r.volume*f,sell:r.volume*(1-f),f}}
+function splitVol(r){
+  const t=DELTA&&DELTA.symbols&&DELTA.symbols[curSym]&&DELTA.symbols[curSym][r.time];
+  if(t&&(t[0]+t[1])>0){const f=t[0]/(t[0]+t[1]);return{buy:r.volume*f,sell:r.volume*(1-f),f,real:true}} // true split from time & sales, scaled to bar volume
+  const g=r.high-r.low;const f=g>0?(r.close-r.low)/g:0.5;return{buy:r.volume*f,sell:r.volume*(1-f),f,real:false}}
 function buyShare(B,from){let b=0,t=0;B.slice(Math.max(0,from)).forEach(r=>{b+=splitVol(r).buy;t+=r.volume});return t?b/t:0.5}
+/* ===== ANCHORED CUMULATIVE DELTA (CVD) =====
+   delta = ask (buy) vol - bid (sell) vol per day; CVD is summed from the same anchor bar as the AVWAP. */
+let DELTA=null, curSym=null;
+function cvdCalc(B,A){let c=0;return B.map((r,i)=>{const v=splitVol(r);const d=v.buy-v.sell;if(!A[i])return{d,c:null,real:v.real,f:v.f};c+=d;return{d,c,real:v.real,f:v.f}})}
+function flowRead(B,A,D){
+  const n=B.length-1,a=A[n],L=B[n];if(!a)return null;
+  const ai=A.findIndex(x=>x);const tot=B.slice(ai).reduce((s,r)=>s+r.volume,0);
+  const cv=D[n].c,norm=tot?cv/tot:0,b5=buyShare(B,n-4),above=L.close>a.vw;
+  let read,cls;
+  if(above&&cv>0){read='Trend confirmed — aggressive buyers above AVWAP. Pullbacks to AVWAP are buyable.';cls='pos'}
+  else if(above){read='Absorption — price holds above AVWAP despite net selling. Bullish while AVWAP holds; confirm on the next pullback.';cls='amb'}
+  else if(cv>0){read='Absorption — buying into AVWAP is being sold by passive sellers. Rallies to AVWAP likely sold.';cls='amb'}
+  else{read='Downtrend confirmed — sellers in control below AVWAP. AVWAP is resistance.';cls='neg'}
+  // divergence over last 10 bars vs prior 10
+  let div=null;const w=10;
+  if(n-2*w>=ai){const pc=B.slice(n-w+1).map(r=>r.close),pq=B.slice(n-2*w+1,n-w+1).map(r=>r.close);
+    const cc=D.slice(n-w+1).map(x=>x.c),cq=D.slice(n-2*w+1,n-w+1).map(x=>x.c);
+    if(Math.max(...pc)>Math.max(...pq)&&Math.max(...cc)<Math.max(...cq))div=['Bearish divergence: price made a higher 10-day high, CVD a lower high — exhaustion risk.','neg'];
+    else if(Math.min(...pc)<Math.min(...pq)&&Math.min(...cc)>Math.min(...cq))div=['Bullish divergence: price made a lower 10-day low, CVD a higher low — selling drying up.','pos'];}
+  // AVWAP test on the last bar
+  let test=null;
+  if(L.low<=a.vw&&L.high>=a.vw){const d=D[n].d;
+    test=L.close>=a.vw&&d>0?['Tested AVWAP and held on positive delta.','pos']:L.close<a.vw&&d<0?['Broke AVWAP on negative delta — acceptance below.','neg']:['Tested AVWAP; delta and close disagree — no edge yet.','amb'];}
+  const nReal=D.slice(ai).filter(x=>x.real).length,nBars=n-ai+1;
+  return{cv,norm,b5,b1:D[n].f,read,cls,div,test,nReal,nBars,above};
+}
 /* ===== TRADING RULES ENGINE ===== */
 const R2=x=>Math.round(x*100)/100;
 function evalRules(sym){
@@ -258,7 +290,21 @@ function renderSetups(sym){
   el.innerHTML=h;
 }
 
-function calc(sym){const B=bars(sym);const c=B.map(b=>b.close);return{B,M:macd(c),S:stoch(B),A:avwap(B,anchors[sym])}}
+function renderFlow(B,A,D){
+  const el=document.getElementById('flow');const r=flowRead(B,A,D);
+  document.getElementById('volSrc').textContent=D[D.length-1].real?'— last bar from broker time & sales (delta.json); faded bars are estimates':'— split by close position in day\'s range; not true tick-level bid/ask data';
+  if(!r){el.innerHTML='';return}
+  const pc=x=>`<span class="${x>=0.6?'pos':x<=0.4?'neg':''}">${(x*100).toFixed(0)}%</span>`;
+  el.innerHTML=`<table>
+    <tr><td>Anchored CVD</td><td class="${sgn(r.cv)}">${r.cv>=0?'+':''}${(r.cv/1e6).toFixed(2)}M <span class="meta">(${(r.norm*100).toFixed(1)}% of vol)</span></td></tr>
+    <tr><td>Ask vol % · last bar / 5d</td><td>${pc(r.b1)} / ${pc(r.b5)}</td></tr>
+    <tr><td>Price vs AVWAP</td><td class="${r.above?'pos':'neg'}">${r.above?'Above':'Below'}</td></tr></table>
+    <div class="setup"><span class="${r.cls}">${r.read}</span></div>
+    ${r.test?`<div class="warn" style="color:var(--${r.test[1]==='pos'?'up':r.test[1]==='neg'?'dn':'av'})">${r.test[0]}</div>`:''}
+    ${r.div?`<div class="warn" style="color:var(--${r.div[1]==='pos'?'up':'dn'})">${r.div[0]}</div>`:''}
+    <div class="note">Data: ${r.nReal}/${r.nBars} bars since anchor from broker time &amp; sales; the rest estimated from close position in range (C−L)/(H−L). ${r.nReal<r.nBars?'Estimates can disagree with true bid/ask splits — upload time &amp; sales to tns/ for real data.':''} 60%+ ask = buyers in control, 40%− = sellers.</div>`;
+}
+function calc(sym){curSym=sym;const B=bars(sym);const c=B.map(b=>b.close);const A=avwap(B,anchors[sym]);return{B,M:macd(c),S:stoch(B),A,D:cvdCalc(B,A)}}
 
 const f2=x=>x==null?'—':x.toFixed(2), f3=x=>x==null?'—':x.toFixed(3);
 const sgn=x=>x>=0?'pos':'neg';
@@ -295,12 +341,13 @@ show=function(sym){
   const b=BANKS.find(x=>x.sym===sym);
   try{localStorage.setItem('bank',sym)}catch(e){}
   charts.forEach(c=>c.remove());charts=[];
-  const {B,M,S,A}=calc(sym);
+  const {B,M,S,A,D}=calc(sym);
   const W=document.getElementById('cP').parentElement.clientWidth-12;
   const cp=LightweightCharts.createChart(document.getElementById('cP'),{...baseOpt(430),width:W});
+  const cd=LightweightCharts.createChart(document.getElementById('cD'),{...baseOpt(140),width:W});
   const cm=LightweightCharts.createChart(document.getElementById('cM'),{...baseOpt(150),width:W});
   const cs=LightweightCharts.createChart(document.getElementById('cS'),{...baseOpt(150),width:W});
-  charts=[cp,cm,cs];
+  charts=[cp,cd,cm,cs];
   const cand=cp.addCandlestickSeries({upColor:'#26a69a',downColor:'#ef5350',borderVisible:false,wickUpColor:'#26a69a',wickDownColor:'#ef5350'});
   cand.setData(B.map(({volume,...r})=>r));
   const vo={priceScaleId:'vol',priceFormat:{type:'volume'},lastValueVisible:false,priceLineVisible:false};
@@ -314,6 +361,14 @@ show=function(sym){
   av.setData(pts(a=>a.vw));u1.setData(pts(a=>a.vw+a.sd));l1.setData(pts(a=>a.vw-a.sd));u2.setData(pts(a=>a.vw+2*a.sd));l2.setData(pts(a=>a.vw-2*a.sd));
   const ai=A.findIndex(x=>x);
   if(ai>=0)cand.setMarkers([{time:B[ai].time,position:'belowBar',color:'#f5b400',shape:'arrowUp',text:'Anchor'}]);
+  // Order flow: daily delta (histogram, own overlay scale) + anchored CVD (line, right scale)
+  const dh=cd.addHistogramSeries({priceScaleId:'dlt',priceFormat:{type:'volume'},priceLineVisible:false,lastValueVisible:false});
+  cd.priceScale('dlt').applyOptions({scaleMargins:{top:0.55,bottom:0}});
+  dh.setData(B.map((r,i)=>({time:r.time,value:D[i].d,color:D[i].d>=0?(D[i].real?'#26a69a':'rgba(38,166,154,.45)'):(D[i].real?'#ef5350':'rgba(239,83,80,.45)')})));
+  const cl=cd.addLineSeries({color:'#c792ea',lineWidth:2,priceLineVisible:false,priceFormat:{type:'volume'},crosshairMarkerVisible:false});
+  cl.setData(B.map((r,i)=>D[i].c!=null?{time:r.time,value:D[i].c}:{time:r.time}));
+  cd.priceScale('right').applyOptions({scaleMargins:{top:0.08,bottom:0.5}});
+  cl.createPriceLine({price:0,color:'#3a414b',lineWidth:1,lineStyle:2,axisLabelVisible:false});
   // MACD
   const hs=cm.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
   hs.setData(B.map((r,i)=>M[i]?{time:r.time,value:M[i].h,color:M[i].h>=0?(i&&M[i-1]&&M[i].h>=M[i-1].h?'#26a69a':'rgba(38,166,154,.5)'):(i&&M[i-1]&&M[i].h<=M[i-1].h?'#ef5350':'rgba(239,83,80,.5)')}:{time:r.time}));
@@ -331,6 +386,8 @@ show=function(sym){
   // legends
   const lg=(i)=>{const r=B[i],a=A[i],m=M[i],s=S[i];
     document.getElementById('lgP').innerHTML=`<b>${b.nm}</b> ${r.time} O ${f2(r.open)} H ${f2(r.high)} L ${f2(r.low)} C ${f2(r.close)} Vol ${(r.volume/1e6).toFixed(2)}M <span class="pos">Ask ${(splitVol(r).buy/1e6).toFixed(2)}M (${(splitVol(r).f*100).toFixed(0)}%)</span> <span class="neg">Bid ${(splitVol(r).sell/1e6).toFixed(2)}M</span> <span style="color:#f5b400">AVWAP ${a?f2(a.vw):'—'}</span> <span style="color:rgba(245,180,0,.7)">±1σ ${a?f2(a.vw-a.sd)+' / '+f2(a.vw+a.sd):'—'}</span>`;
+    const dd=D[i],M1=x=>(x>=0?'+':'')+(x/1e6).toFixed(2)+'M';
+    document.getElementById('lgD').innerHTML=`Order flow ${dd.real?'<span class="pos">(time &amp; sales)</span>':'<span class="meta">(estimated)</span>'} · Delta <span class="${sgn(dd.d)}">${M1(dd.d)}</span> · <span style="color:#c792ea">Anchored CVD ${dd.c==null?'—':M1(dd.c)}</span> · Ask ${(dd.f*100).toFixed(0)}%`;
     document.getElementById('lgM').innerHTML=`MACD (12,26,9) <span style="color:#58a6ff">${f3(m&&m.m)}</span> <span style="color:#ff9f43">${f3(m&&m.s)}</span> <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span>`;
     document.getElementById('lgS').innerHTML=`Stoch (14,3,3) <span style="color:#58a6ff">%K ${f2(s.k)}</span> <span style="color:#ff9f43">%D ${f2(s.d)}</span>`;};
   lg(n-1);
@@ -360,13 +417,15 @@ show=function(sym){
     let h='';let placed=false;rows.forEach(([k,v])=>{if(!placed&&L>=v){h+=`<tr class="cur"><td>Last close</td><td>${f2(L)}</td></tr>`;placed=true}h+=`<tr><td>${k}</td><td>${f2(v)} <span class="meta">(${((v/L-1)*100>=0?'+':'')}${((v/L-1)*100).toFixed(1)}%)</span></td></tr>`});
     if(!placed)h+=`<tr class="cur"><td>Last close</td><td>${f2(L)}</td></tr>`;
     document.getElementById('ladder').innerHTML=h;}
+  renderFlow(B,A,D);
   renderSetups(sym);
   renderSummary(sym);
   renderHistory(sym);
+  curSym=sym; // renderSummary loops all banks; restore for crosshair legend
 };
 
 
-document.getElementById('foot').innerHTML='Source: Yahoo Finance chart API (query1.finance.yahoo.com), daily OHLCV, prices unadjusted for dividends. Ask/bid volume is an estimate: ask share = (C−L)/(H−L) of the day’s volume (true trade-side split needs SGX tick data). AVWAP uses typical price (H+L+C)/3 × volume from the anchor bar onward. Dividend announcement dates (config.json): DBS newsroom (6 Aug & 5 Nov 2026), OCBC media release (7 Aug 2026), UOB 1H26 results (7 Aug 2026). Data refreshes on weekdays after SGX close via GitHub Actions — verify against your broker terminal before acting.';
+document.getElementById('foot').innerHTML='Source: Yahoo Finance chart API (query1.finance.yahoo.com), daily OHLCV, prices unadjusted for dividends. Ask/bid volume: from broker time &amp; sales (delta.json, auction prints excluded) where imported, otherwise estimated as ask share = (C−L)/(H−L) of the day’s volume. Order-flow panel: daily delta = ask − bid volume; CVD summed from the AVWAP anchor bar. AVWAP uses typical price (H+L+C)/3 × volume from the anchor bar onward. Dividend announcement dates (config.json): DBS newsroom (6 Aug & 5 Nov 2026), OCBC media release (7 Aug 2026), UOB 1H26 results (7 Aug 2026). Data refreshes on weekdays after SGX close via GitHub Actions — verify against your broker terminal before acting.';
 let current='D05.SI';try{current=localStorage.getItem('bank')||current}catch(e){}
 const _show=show; show=sym=>{current=sym;_show(sym)};
 async function getJSON(f,optional){
@@ -378,8 +437,8 @@ async function getJSON(f,optional){
 async function loadData(){
   const st=document.getElementById('asof');st.textContent='Loading data…';
   try{
-    const [cfg,j,sc]=await Promise.all([getJSON('config.json'),getJSON('data.json'),getJSON('scans.json',true)]);
-    applyConfig(cfg);RAW=j.symbols;SCANS=(sc&&sc.scans)||[];
+    const [cfg,j,sc,dl]=await Promise.all([getJSON('config.json'),getJSON('data.json'),getJSON('scans.json',true),getJSON('delta.json',true).catch(()=>null)]);
+    applyConfig(cfg);RAW=j.symbols;DELTA=dl;SCANS=(sc&&sc.scans)||[];
     if(!BANKS.some(b=>b.sym===current))current=BANKS[0].sym;
     const last=day(Math.max(...Object.values(RAW).map(a=>a[a.length-1][0])));
     st.textContent=`Data: ${j.source||'Yahoo Finance'} · last bar ${last} · updated ${sgt(j.updated)}${sc?` · scan log ${SCANS.length} records`:''}`;
