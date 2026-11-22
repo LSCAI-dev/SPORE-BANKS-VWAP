@@ -87,7 +87,7 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
   <div class="meta" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
   <span id="asof">Loading data…</span>
   <button id="reload">↻ Reload data</button>
-  <a href="cvd.html" style="color:var(--acc);text-decoration:none;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:3px 9px;white-space:nowrap">📊 Anchored CVD · Δ%</a>
+  <a href="cvd.html" style="color:var(--acc);text-decoration:none;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:3px 9px;white-space:nowrap">📊 Anchored CVD</a>
 </div>
 </header>
 <div class="summary" id="summary"></div>
@@ -148,7 +148,7 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
       </ul>
       <p><b>The numbers in the box.</b></p>
       <ul>
-        <li><b>Delta</b> = ask volume − bid volume for the day. Positive = buyers more aggressive that day.</li>
+        <li><b>Delta</b> = ask volume − bid volume for the day. Positive = buyers more aggressive that day. The Order flow chart shows it <b>normalised</b>: each bar is the day's ask volume as a % of total volume, drawn up or down from the 50% line, with dashed lines at <span class="pos">60% (buyers in control)</span> and <span class="neg">40% (sellers in control)</span>. Δ% = Ask% − Bid% = 2 × Ask% − 100, so 60% / 40% equal Δ% of +20% / −20%. Bars between the lines are faint (balanced).</li>
         <li><b>Anchored CVD</b> = all daily deltas added up from the AVWAP anchor date. It is the running score of buyers vs sellers for the same group of holders the AVWAP measures. The % shows how lopsided it is relative to all volume traded since the anchor.</li>
         <li><b>Ask vol %</b> = share of volume traded at the ask. <span class="pos">60%+</span> buyers in control · 45–55% balanced · <span class="neg">40% or less</span> sellers in control.</li>
       </ul>
@@ -385,7 +385,7 @@ show=function(sym){
   const {B,M,S,A,D}=calc(sym);
   const W=document.getElementById('cP').parentElement.clientWidth-12;
   const cp=LightweightCharts.createChart(document.getElementById('cP'),{...baseOpt(430),width:W});
-  const cd=LightweightCharts.createChart(document.getElementById('cD'),{...baseOpt(140),width:W});
+  const cd=LightweightCharts.createChart(document.getElementById('cD'),{...baseOpt(180),width:W});
   const cm=LightweightCharts.createChart(document.getElementById('cM'),{...baseOpt(150),width:W});
   const cs=LightweightCharts.createChart(document.getElementById('cS'),{...baseOpt(150),width:W});
   charts=[cp,cd,cm,cs];
@@ -403,12 +403,20 @@ show=function(sym){
   const ai=A.findIndex(x=>x);
   if(ai>=0)cand.setMarkers([{time:B[ai].time,position:'belowBar',color:'#f5b400',shape:'arrowUp',text:'Anchor'}]);
   // Order flow: daily delta (histogram, own overlay scale) + anchored CVD (line, right scale)
-  const dh=cd.addHistogramSeries({priceScaleId:'dlt',priceFormat:{type:'volume'},priceLineVisible:false,lastValueVisible:false});
-  cd.priceScale('dlt').applyOptions({scaleMargins:{top:0.55,bottom:0}});
-  dh.setData(B.map((r,i)=>({time:r.time,value:D[i].d,color:D[i].d>=0?(D[i].real?'#26a69a':'rgba(38,166,154,.45)'):(D[i].real?'#ef5350':'rgba(239,83,80,.45)')})));
-  const cl=cd.addLineSeries({color:'#c792ea',lineWidth:2,priceLineVisible:false,priceFormat:{type:'volume'},crosshairMarkerVisible:false});
+  // Normalised delta: ask (buy) volume as % of the day's total volume, bars drawn from the 50% line.
+  // >=60% = buyers in control, <=40% = sellers in control (trading rules). Delta% = Ask% - Bid% = 2 x Ask% - 100.
+  const pctFmt={type:'custom',formatter:v=>v.toFixed(0)+'%',minMove:1};
+  const dh=cd.addHistogramSeries({base:50,priceFormat:pctFmt,priceLineVisible:false,lastValueVisible:true});
+  dh.applyOptions({autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})});
+  cd.priceScale('right').applyOptions({scaleMargins:{top:0.06,bottom:0.04}});
+  const askCol=(p,real)=>p>=60?(real?'#26a69a':'rgba(38,166,154,.6)'):p<=40?(real?'#ef5350':'rgba(239,83,80,.6)'):(p>=50?'rgba(38,166,154,.22)':'rgba(239,83,80,.22)');
+  dh.setData(B.map((r,i)=>({time:r.time,value:D[i].f*100,color:askCol(D[i].f*100,D[i].real)})));
+  dh.createPriceLine({price:60,color:'#26a69a',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:W>600?'Buyers in control':''});
+  dh.createPriceLine({price:50,color:'#3a414b',lineWidth:1,lineStyle:3,axisLabelVisible:false});
+  dh.createPriceLine({price:40,color:'#ef5350',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:W>600?'Sellers in control':''});
+  const cl=cd.addLineSeries({priceScaleId:'cvd',color:'#c792ea',lineWidth:2,priceLineVisible:false,lastValueVisible:false,priceFormat:{type:'volume'},crosshairMarkerVisible:false});
   cl.setData(B.map((r,i)=>D[i].c!=null?{time:r.time,value:D[i].c}:{time:r.time}));
-  cd.priceScale('right').applyOptions({scaleMargins:{top:0.08,bottom:0.5}});
+  cd.priceScale('cvd').applyOptions({scaleMargins:{top:0.08,bottom:0.08}}); // anchored CVD line, overlaid on its own scale
   cl.createPriceLine({price:0,color:'#3a414b',lineWidth:1,lineStyle:2,axisLabelVisible:false});
   // MACD
   const hs=cm.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
@@ -428,7 +436,7 @@ show=function(sym){
   const lg=(i)=>{const r=B[i],a=A[i],m=M[i],s=S[i];
     document.getElementById('lgP').innerHTML=`<b>${b.nm}</b> ${r.time} O ${f2(r.open)} H ${f2(r.high)} L ${f2(r.low)} C ${f2(r.close)} Vol ${(r.volume/1e6).toFixed(2)}M <span class="pos">Ask ${(splitVol(r).buy/1e6).toFixed(2)}M (${(splitVol(r).f*100).toFixed(0)}%)</span> <span class="neg">Bid ${(splitVol(r).sell/1e6).toFixed(2)}M</span> <span style="color:#f5b400">AVWAP ${a?f2(a.vw):'—'}</span> <span style="color:rgba(245,180,0,.7)">±1σ ${a?f2(a.vw-a.sd)+' / '+f2(a.vw+a.sd):'—'}</span>`;
     const dd=D[i],M1=x=>(x>=0?'+':'')+(x/1e6).toFixed(2)+'M';
-    document.getElementById('lgD').innerHTML=`Order flow ${dd.real?'<span class="pos">(time &amp; sales)</span>':'<span class="meta">(estimated)</span>'} · Delta <span class="${sgn(dd.d)}">${M1(dd.d)}</span> · <span style="color:#c792ea">Anchored CVD ${dd.c==null?'—':M1(dd.c)}</span> · Ask ${(dd.f*100).toFixed(0)}%`;
+    document.getElementById('lgD').innerHTML=`Order flow ${dd.real?'<span class="pos">(time &amp; sales)</span>':'<span class="meta">(estimated)</span>'} · Ask <b class="${dd.f>=0.6?'pos':dd.f<=0.4?'neg':''}">${(dd.f*100).toFixed(0)}%</b> of volume${dd.f>=0.6?' <span class="pos">→ buyers in control</span>':dd.f<=0.4?' <span class="neg">→ sellers in control</span>':' <span class="meta">→ balanced</span>'} · Δ% <span class="${sgn(dd.d)}">${dd.f>=0.5?'+':''}${((2*dd.f-1)*100).toFixed(0)}%</span> <span class="meta">(${M1(dd.d)})</span> · <span style="color:#c792ea">Anchored CVD ${dd.c==null?'—':M1(dd.c)}</span>`;
     document.getElementById('lgM').innerHTML=`MACD (12,26,9) <span style="color:#58a6ff">${f3(m&&m.m)}</span> <span style="color:#ff9f43">${f3(m&&m.s)}</span> <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span>`;
     document.getElementById('lgS').innerHTML=`Stoch (14,3,3) <span style="color:#58a6ff">%K ${f2(s.k)}</span> <span style="color:#ff9f43">%D ${f2(s.d)}</span>`;};
   lg(n-1);

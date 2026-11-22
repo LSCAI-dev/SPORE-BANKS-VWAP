@@ -11,7 +11,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" type="image/png" href="icons/icon-192.png">
-<title>SG Banks — Anchored CVD · Delta%</title>
+<title>SG Banks — Anchored CVD</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root {
@@ -129,7 +129,7 @@ footer{color:var(--mut);font-size:11px;padding:10px 18px 20px;border-top:1px sol
 <body>
 <header>
   <a class="nav-back" href="index.html">← AVWAP · MACD · Stoch</a>
-  <h1>Anchored CVD · Session Δ%</h1>
+  <h1>Anchored CVD</h1>
   <div class="meta" id="asof">Loading…</div>
 </header>
 
@@ -148,6 +148,8 @@ footer{color:var(--mut);font-size:11px;padding:10px 18px 20px;border-top:1px sol
            autocomplete="off" placeholder="YYYY-MM-DD">
   </div>
   <button class="go" id="goBtn">Update</button>
+  <button class="go" id="rstBtn" style="background:#21262d;border:1px solid var(--line)">Reset to default</button>
+  <div class="meta" id="ancNote" style="flex-basis:100%;font-size:11.5px"></div>
   <div class="src-badge src-est" id="srcBadge">
     <div class="src-dot"></div>
     <span id="srcTxt">CLV estimate</span>
@@ -156,7 +158,6 @@ footer{color:var(--mut);font-size:11px;padding:10px 18px 20px;border-top:1px sol
 
 <div class="stats" id="statsRow">
   <div class="stat"><div class="stat-l">Total CVD</div><div class="stat-v pu" id="sTotalCvd">—</div></div>
-  <div class="stat"><div class="stat-l">Last Δ%</div><div class="stat-v" id="sLastDelta">—</div></div>
   <div class="stat"><div class="stat-l">Last Ask%</div><div class="stat-v" id="sLastAsk">—</div></div>
   <div class="stat"><div class="stat-l">CVD Peak</div><div class="stat-v pu" id="sPeak">—</div></div>
   <div class="stat"><div class="stat-l">Days</div><div class="stat-v muted" id="sDays">—</div></div>
@@ -174,12 +175,6 @@ footer{color:var(--mut);font-size:11px;padding:10px 18px 20px;border-top:1px sol
   </div>
   <div class="chart-wrap" id="cvdWrap"><canvas id="cvdCanvas"></canvas></div>
 
-  <div class="panel-label" style="margin-top:8px">
-    <span class="pl-name" style="color:var(--up)">▪</span>
-    <span class="pl-name" style="color:var(--dn)">▪</span>
-    <span class="pl-sub">Session Δ% = (AskVol − BidVol) / TotalVol × 100 &nbsp;≡&nbsp; 2 × Ask% − 100</span>
-  </div>
-  <div class="chart-wrap" id="dltWrap"><canvas id="dltCanvas"></canvas></div>
 </div>
 
 <div class="thresh-block">
@@ -196,39 +191,11 @@ footer{color:var(--mut);font-size:11px;padding:10px 18px 20px;border-top:1px sol
       <span>Sellers have fully absorbed net buying since anchor</span>
     </div>
   </div>
-  <div class="thresh-panel">
-    <h4>Session Δ% thresholds — buyer / seller power</h4>
-    <div class="trow">
-      <div class="tline" style="border-top:1.5px dashed rgba(38,166,154,0.6)"></div>
-      <span class="tval up">+40%</span>
-      <span>Heavy buying — ask vol &gt; 70%</span>
-    </div>
-    <div class="trow">
-      <div class="tline" style="border-top:1px dashed rgba(38,166,154,0.4)"></div>
-      <span class="tval up">+20%</span>
-      <span>Notable buying — ask vol &gt; 60%</span>
-    </div>
-    <div class="trow">
-      <div class="tline" style="border-top:1px dashed rgba(230,237,243,0.2)"></div>
-      <span class="tval muted">0%</span>
-      <span>Balanced</span>
-    </div>
-    <div class="trow">
-      <div class="tline" style="border-top:1px dashed rgba(239,83,80,0.4)"></div>
-      <span class="tval dn">−20%</span>
-      <span>Notable selling — bid vol &gt; 60%</span>
-    </div>
-    <div class="trow">
-      <div class="tline" style="border-top:1.5px dashed rgba(239,83,80,0.6)"></div>
-      <span class="tval dn">−40%</span>
-      <span>Heavy selling — bid vol &gt; 70%</span>
-    </div>
-  </div>
 </div>
 </div><!-- #mainContent -->
 
 <footer>
-  <span id="footerNote">Δ% estimated from close position in day's range (CLV method).
+  <span id="footerNote">Ask/bid split estimated from close position in day's range (CLV method).
   For real bid/ask split, drop broker time &amp; sales CSV into <code>tns/</code> and run
   <code>python scripts/import_tns.py</code>.</span>
 </footer>
@@ -240,9 +207,9 @@ footer{color:var(--mut);font-size:11px;padding:10px 18px 20px;border-top:1px sol
 
 // ── helpers ────────────────────────────────────────────────────────────────
 const TICKERS = {
-  'D05.SI': { code: 'D05', name: 'DBS Group',  defaultAnchor: '2026-04-29' },
-  'O39.SI': { code: 'O39', name: 'OCBC Bank',  defaultAnchor: '2026-04-29' },
-  'U11.SI': { code: 'U11', name: 'UOB',        defaultAnchor: '2026-04-29' },
+  'D05.SI': { code: 'D05', name: 'DBS Group',  defaultAnchor: '2026-11-05' },
+  'O39.SI': { code: 'O39', name: 'OCBC Bank',  defaultAnchor: '2026-08-07' },
+  'U11.SI': { code: 'U11', name: 'UOB',        defaultAnchor: '2026-08-07' },
 };
 
 const $ = id => document.getElementById(id);
@@ -268,7 +235,7 @@ function anchorTs(str) {
 function clv(o, h, l, c) {
   const rng = h - l;
   if (rng === 0) return 0.5;
-  return Math.min(0.97, Math.max(0.03, (c - l) / rng));
+  return (c - l) / rng;   // same estimate as index.html splitVol(): no clamping
 }
 
 // ── state ──────────────────────────────────────────────────────────────────
@@ -278,6 +245,20 @@ let cvdChart = null;
 let dltChart = null;
 let currentTicker = 'D05.SI';
 let currentAnchor = '';
+// Shared with index.html (same site, same browser storage): a custom anchor set on either page applies to both.
+function anchorFor(sym) {
+  try { const s = localStorage.getItem('anc_' + sym); if (s) return s; } catch(e) {}
+  return TICKERS[sym].defaultAnchor;
+}
+function saveAnchor(sym, v) {
+  try { v === TICKERS[sym].defaultAnchor ? localStorage.removeItem('anc_' + sym) : localStorage.setItem('anc_' + sym, v); } catch(e) {}
+}
+function showAncNote() {
+  const t = TICKERS[currentTicker], cur = $('ancIn').value.trim();
+  $('ancNote').textContent = cur === t.defaultAnchor
+    ? `Default: last dividend announcement — ${t.ev || t.defaultAnchor}`
+    : `Custom anchor (shared with main chart). Default ${t.defaultAnchor}${t.ev ? ': ' + t.ev : ''}`;
+}
 
 // ── load data ──────────────────────────────────────────────────────────────
 async function loadData() {
@@ -290,6 +271,14 @@ async function loadData() {
   try {
     DELTA = await fetch('delta.json').then(r => r.ok ? r.json() : null).catch(() => null);
   } catch(e) { DELTA = null; }
+  // Default anchors = each bank's latest dividend announcement in config.json (same source as the main app)
+  try {
+    const cfg = await fetch('config.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+    (cfg && cfg.banks || []).forEach(b => {
+      const a = b.anchors[b.anchors.length - 1];
+      if (TICKERS[b.sym] && a) { TICKERS[b.sym].defaultAnchor = a.date; TICKERS[b.sym].ev = a.ev; }
+    });
+  } catch(e) { /* keep built-in defaults */ }
   return true;
 }
 
@@ -326,7 +315,7 @@ function buildSeries(ticker, anchorTs_) {
       // Real broker T&S data
       const ask = dEntry[0], bid = dEntry[1];
       askFrac  = ask / (ask + bid);
-      deltaAbs = (ask - bid) / 1e6;
+      deltaAbs = (2 * askFrac - 1) * vol / 1e6;   // real split scaled to bar volume, as in index.html
       realCount++;
     } else {
       // CLV estimate
@@ -444,11 +433,6 @@ function buildCharts(series) {
   // Peak CVD threshold: round up to nearest 25M
   const peakLevel = Math.ceil(cvdMax / 25) * 25 || 25;
 
-  // Bar colors for Delta%
-  const barColors  = dpctArr.map(d => d >= 0 ? 'rgba(38,166,154,0.72)' : 'rgba(239,83,80,0.72)');
-  const barBorders = dpctArr.map(d => d >= 0 ? '#26a69a' : '#ef5350');
-  // Highlight last bar
-  barColors[n-1]  = dpctArr[n-1] >= 0 ? 'rgba(38,166,154,0.95)' : 'rgba(239,83,80,0.95)';
 
   // CVD y-axis range
   const cvdMin = Math.min(0, ...cvdArr);
@@ -505,46 +489,6 @@ function buildCharts(series) {
     }
   );
 
-  dltChart = new Chart(
-    document.getElementById('dltCanvas').getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{ label: 'Session Δ%', data: dpctArr,
-          backgroundColor: barColors, borderColor: barBorders,
-          borderWidth: 0.5, barPercentage: 0.88, categoryPercentage: 1.0 }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, animation: { duration: 400 },
-        interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        scales: {
-          ...baseScale,
-          y: {
-            min: -75, max: 60,
-            grid: { color: 'rgba(38,42,54,.7)' }, border: { display: false },
-            ticks: { color: '#8b949e',
-                     font: { family: 'ui-monospace,Menlo,Consolas,monospace', size: 9 },
-                     callback: v => (v > 0 ? '+' : '') + v + '%', maxTicksLimit: 6 }
-          }
-        }
-      },
-      plugins: [
-        threshPlugin([
-          { v: 40, fillA: 'rgba(38,166,154,0.06)', color: 'rgba(38,166,154,0.6)', w:1.5, dash:[6,4],
-            label: '+40%', lc: 'rgba(38,166,154,.65)' },
-          { v: 20, fillA: 'rgba(38,166,154,0.03)', color: 'rgba(38,166,154,0.4)', dash:[4,4],
-            label: '+20%', lc: 'rgba(38,166,154,.5)' },
-          { v: 0, color: 'rgba(230,237,243,0.18)', dash:[2,4] },
-          { v:-20, fillB: 'rgba(239,83,80,0.03)', color: 'rgba(239,83,80,0.4)', dash:[4,4],
-            label: '−20%', lc: 'rgba(239,83,80,.5)' },
-          { v:-40, fillB: 'rgba(239,83,80,0.06)', color: 'rgba(239,83,80,0.6)', w:1.5, dash:[6,4],
-            label: '−40%', lc: 'rgba(239,83,80,.65)' },
-        ])
-      ]
-    }
-  );
-
   hookHover();
 }
 
@@ -556,29 +500,24 @@ function cvdZone(v) {
   if (v > 0) return v >= 50 ? 'Strong accumulation' : 'Mild buyer bias';
   return v <= -50 ? 'Heavy distribution' : 'Net selling since anchor';
 }
-function sessionLabel(dp) {
-  if (dp >= 40)  return '🟢 Heavy buying';
-  if (dp >= 20)  return '🟢 Strong buying';
-  if (dp > 0)    return '↑ Net buying';
-  if (dp > -20)  return '↓ Net selling';
-  if (dp > -40)  return '🔴 Strong selling';
-  return '🔴 Heavy selling';
+function sessionLabel(ask) {
+  if (ask >= 60) return 'Buyers in control (ask ≥ 60%)';
+  if (ask <= 40) return 'Sellers in control (ask ≤ 40%)';
+  return 'Balanced (ask 40–60%)';
 }
 
 function updateTip(idx, px, py) {
   if (!_series || idx < 0 || idx >= _series.n) { tipEl.style.opacity='0'; return; }
-  const cv = _series.cvdArr[idx], dp = _series.dpctArr[idx];
-  const ask = (100 + dp) / 2;
-  const dColor = dp >= 0 ? '#26a69a' : '#ef5350';
+  const cv = _series.cvdArr[idx], ask = _series.askFracArr[idx] * 100;
+  const dColor = ask >= 60 ? '#26a69a' : ask <= 40 ? '#ef5350' : '#8b949e';
   tipEl.innerHTML =
     `<div style="color:#8b949e;font-size:10.5px;margin-bottom:4px">${_series.datesFull[idx]}</div>` +
     `<div style="color:#a78bfa">CVD ${cv >= 0 ? '+' : ''}${cv.toFixed(2)}M</div>` +
     `<div style="color:#8b949e;font-size:10.5px;margin-bottom:3px">${cvdZone(cv)}</div>` +
-    `<div style="color:${dColor}">Δ% ${dp >= 0 ? '+' : ''}${dp.toFixed(1)}%</div>` +
-    `<div style="color:${dColor};font-size:10.5px">Ask ${ask.toFixed(0)}% / Bid ${(100-ask).toFixed(0)}%</div>` +
-    `<div style="color:#8b949e;font-size:10.5px">${sessionLabel(dp)}</div>`;
+    `<div style="color:${dColor}">Ask ${ask.toFixed(0)}% / Bid ${(100-ask).toFixed(0)}%</div>` +
+    `<div style="color:#8b949e;font-size:10.5px">${sessionLabel(ask)}</div>`;
   tipEl.style.opacity = '1';
-  const tw=165, th=108;
+  const tw=165, th=92;
   let tx=px+14, ty=py-55;
   if (tx+tw > window.innerWidth-8)  tx = px-tw-10;
   if (ty < 8) ty = 8;
@@ -609,8 +548,7 @@ function getIdx(canvas, chart, cx) {
 }
 
 function hookHover() {
-  [[document.getElementById('cvdCanvas'), cvdChart],
-   [document.getElementById('dltCanvas'), dltChart]].forEach(([canvas, chart]) => {
+  [[document.getElementById('cvdCanvas'), cvdChart]].forEach(([canvas, chart]) => {
     canvas.addEventListener('mousemove', e => {
       const idx = getIdx(canvas, chart, e.clientX);
       updateTip(idx, e.pageX, e.pageY); syncAll(idx);
@@ -630,14 +568,12 @@ function hookHover() {
 function updateStats(series) {
   _series = series;
   const { cvdArr, dpctArr, askFracArr, n, cvdMax, lastPrice, realCount } = series;
-  const totalCvd = cvdArr[n-1], lastDp = dpctArr[n-1], lastAsk = askFracArr[n-1] * 100;
+  const totalCvd = cvdArr[n-1], lastAsk = askFracArr[n-1] * 100;
   const color = v => v >= 0 ? 'up' : 'dn';
 
   $('sTotalCvd').textContent = (totalCvd >= 0 ? '+' : '') + totalCvd.toFixed(2) + 'M';
-  $('sLastDelta').textContent = (lastDp >= 0 ? '+' : '') + lastDp.toFixed(1) + '%';
-  $('sLastDelta').className = 'stat-v ' + color(lastDp);
   $('sLastAsk').textContent  = lastAsk.toFixed(0) + '%';
-  $('sLastAsk').className    = 'stat-v ' + color(lastAsk - 50);
+  $('sLastAsk').className    = 'stat-v ' + (lastAsk >= 60 ? 'up' : lastAsk <= 40 ? 'dn' : 'muted');
   $('sPeak').textContent     = '+' + cvdMax.toFixed(2) + 'M';
   $('sDays').textContent     = n;
   $('sPrice').textContent    = 'S$' + lastPrice.toFixed(3);
@@ -651,7 +587,7 @@ function updateStats(series) {
     : 'CLV estimate';
   $('footerNote').textContent = hasReal
     ? `${realCount} of ${n} sessions use real broker time & sales data. Remaining ${n - realCount} sessions use CLV (close position in day's range) as an estimate of ask/bid split.`
-    : `Δ% estimated from close position in day's range (CLV method). For real bid/ask split, drop broker time & sales CSV into tns/ and run python scripts/import_tns.py.`;
+    : `Ask/bid split estimated from close position in day's range (CLV method). For real bid/ask split, drop broker time & sales CSV into tns/ and run python scripts/import_tns.py.`;
 }
 
 // ── render ─────────────────────────────────────────────────────────────────
@@ -661,6 +597,8 @@ function render() {
   if (!ancTs) { $('ancIn').classList.add('bad'); return; }
   $('ancIn').classList.remove('bad');
   currentAnchor = ancStr;
+  saveAnchor(currentTicker, ancStr);
+  showAncNote();
 
   const series = buildSeries(currentTicker, ancTs);
   if (!series || !series.n) {
@@ -671,7 +609,7 @@ function render() {
   $('loading').style.display = 'none';
   $('mainContent').style.display = '';
   const meta = TICKERS[currentTicker];
-  document.title = `${meta.code} — Anchored CVD · Delta%`;
+  document.title = `${meta.code} — Anchored CVD`;
   updateStats(series);
   // Defer chart build by one rAF so the browser has painted the now-visible
   // containers and Chart.js can read their real pixel dimensions.
@@ -686,21 +624,11 @@ function render() {
   const ok = await loadData();
   if (!ok) return;
 
-  // Set default ticker and anchor
-  currentTicker = 'D05.SI';
-  const defAnchor = TICKERS[currentTicker].defaultAnchor;
-
-  // Pick an anchor: either a sensible recent anchor or the earliest available bar
-  const bars = (DATA.symbols || {})[currentTicker] || [];
-  const oneYearAgo = new Date(); oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-  const oya = Math.floor(oneYearAgo / 1000);
-  const anchorBar = bars.find(b => b[0] >= oya) || bars[0];
-  const computedAnchor = anchorBar
-    ? new Date(anchorBar[0] * 1000).toISOString().slice(0, 10)
-    : defAnchor;
-
-  $('ancIn').value = computedAnchor;
-  currentAnchor = computedAnchor;
+  // Same bank and anchor as the main chart
+  try { const b = localStorage.getItem('bank'); if (b && TICKERS[b]) currentTicker = b; } catch(e) {}
+  document.querySelectorAll('#tickerSeg button').forEach(b => b.classList.toggle('on', b.dataset.t === currentTicker));
+  $('ancIn').value = anchorFor(currentTicker);
+  currentAnchor = $('ancIn').value;
 
   // Wire controls
   document.querySelectorAll('#tickerSeg button').forEach(btn => {
@@ -708,10 +636,13 @@ function render() {
       document.querySelectorAll('#tickerSeg button').forEach(b => b.classList.remove('on'));
       btn.classList.add('on');
       currentTicker = btn.dataset.t;
+      try { localStorage.setItem('bank', currentTicker); } catch(e) {}
+      $('ancIn').value = anchorFor(currentTicker);
       render();
     });
   });
   $('goBtn').addEventListener('click', render);
+  $('rstBtn').addEventListener('click', () => { $('ancIn').value = TICKERS[currentTicker].defaultAnchor; render(); });
   $('ancIn').addEventListener('keydown', e => { if (e.key === 'Enter') render(); });
 
   render();
