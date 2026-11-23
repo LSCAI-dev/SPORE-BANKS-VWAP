@@ -501,9 +501,9 @@ function cvdZone(v) {
   return v <= -50 ? 'Heavy distribution' : 'Net selling since anchor';
 }
 function sessionLabel(ask) {
-  if (ask >= 60) return 'Buyers in control (ask ≥ 60%)';
-  if (ask <= 40) return 'Sellers in control (ask ≤ 40%)';
-  return 'Balanced (ask 40–60%)';
+  if (ask >= 60) return 'Buying pressure — buyers paying the seller\'s price (ask ≥ 60%)';
+  if (ask <= 40) return 'Selling pressure — sellers accepting the buyer\'s price (bid ≥ 60%)';
+  return 'Balanced (neither side ≥ 60%)';
 }
 
 function updateTip(idx, px, py) {
@@ -517,7 +517,7 @@ function updateTip(idx, px, py) {
     `<div style="color:${dColor}">Ask ${ask.toFixed(0)}% / Bid ${(100-ask).toFixed(0)}%</div>` +
     `<div style="color:#8b949e;font-size:10.5px">${sessionLabel(ask)}</div>`;
   tipEl.style.opacity = '1';
-  const tw=165, th=92;
+  const tw=230, th=104;
   let tx=px+14, ty=py-55;
   if (tx+tw > window.innerWidth-8)  tx = px-tw-10;
   if (ty < 8) ty = 8;

@@ -94,7 +94,7 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
 <div class="main">
   <div class="charts">
     <div class="pane-l" id="lgP"></div><div id="cP"></div>
-    <div class="pane-l" style="padding-top:0"><span><span class="pos">■</span> est. ask (buy) volume</span><span><span class="neg">■</span> est. bid (sell) volume</span><span id="volSrc">— split by close position in day's range; not true tick-level bid/ask data</span></div>
+    <div class="pane-l" style="padding-top:0"><span><span class="pos">■</span> est. ask volume (at seller's price)</span><span><span class="neg">■</span> est. bid volume (at buyer's price)</span><span id="volSrc">— split by close position in day's range; not true tick-level bid/ask data</span></div>
     <div class="pane-l" id="lgD"></div><div id="cD"></div>
     <div class="pane-l" id="lgM"></div><div id="cM"></div>
     <div class="pane-l" id="lgS"></div><div id="cS"></div>
@@ -142,15 +142,23 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
       <p><b>The two questions.</b> AVWAP answers <i>“where is price compared with the average price paid since the dividend announcement?”</i> Order flow answers <i>“who is pushing — buyers or sellers?”</i> Read together, they tell you whether a move is real or being quietly resisted.</p>
       <p><b>Bid vs ask volume, in plain terms.</b></p>
       <ul>
-        <li><b>Traded at the ask</b> = a buyer was impatient and paid the seller's asking price. Counts as <span class="pos">buying pressure</span>.</li>
-        <li><b>Traded at the bid</b> = a seller was impatient and accepted the buyer's bid. Counts as <span class="neg">selling pressure</span>.</li>
-        <li>The patient side (orders waiting in the queue) is “passive”. Big passive orders can soak up the impatient side without price moving — this is called <b>absorption</b>.</li>
+        <li><b>Ask %</b> = transactions at the <b>seller's price</b> (the ask) ÷ total volume. The buyer was impatient and paid what the seller asked, using up the offers and pushing price up. Counts as <span class="pos">buying pressure</span>.</li>
+        <li><b>Bid %</b> = transactions at the <b>buyer's price</b> (the bid) ÷ total volume. The seller was impatient and accepted what the buyer bid, using up the bids and pushing price down. Counts as <span class="neg">selling pressure</span>.</li>
+        <li>Ask % + Bid % = 100%.</li>
+        <li>The patient side (orders waiting in the queue) is “passive”. A large passive order can soak up the impatient side without price moving — this is called <b>absorption</b>. Example: Ask % stays high but price does not rise, because a big seller keeps refilling the ask — the <b>passive seller is controlling price</b>.</li>
       </ul>
       <p><b>The numbers in the box.</b></p>
       <ul>
-        <li><b>Delta</b> = ask volume − bid volume for the day. Positive = buyers more aggressive that day. The Order flow chart shows it <b>normalised</b>: each bar is the day's ask volume as a % of total volume, drawn up or down from the 50% line, with dashed lines at <span class="pos">60% (buyers in control)</span> and <span class="neg">40% (sellers in control)</span>. Δ% = Ask% − Bid% = 2 × Ask% − 100, so 60% / 40% equal Δ% of +20% / −20%. Bars between the lines are faint (balanced).</li>
+        <li><b>Order flow chart</b> = the <span style="color:#58a6ff">blue line</span> is Ask % over the last 5 sessions (volume-weighted). Each single day's split is shown in the price chart's volume bars (<span class="pos">teal</span> = at the ask, <span class="neg">red</span> = at the bid). The axis reads <b>Ask % / Bid %</b>, e.g. 60/40.
+          <ul>
+            <li><span class="pos">Ask ≥ 60%</span> (teal zone) = <b>buying pressure — buyers paying the seller's price</b>.</li>
+            <li><span class="neg">Bid ≥ 60%</span> (red zone, i.e. Ask ≤ 40%) = <b>selling pressure — sellers accepting the buyer's price</b>.</li>
+            <li>In between = balanced.</li>
+            <li>High Ask % while price is flat or falling = <b>absorption — a passive seller controlling price</b> (shown in the Order flow box). High Bid % while price holds = a passive buyer absorbing.</li>
+          </ul></li>
+        <li><b>Delta</b> = ask volume − bid volume for the day (shares). Positive = more traded at the seller's price.</li>
         <li><b>Anchored CVD</b> = all daily deltas added up from the AVWAP anchor date. It is the running score of buyers vs sellers for the same group of holders the AVWAP measures. The % shows how lopsided it is relative to all volume traded since the anchor.</li>
-        <li><b>Ask vol %</b> = share of volume traded at the ask. <span class="pos">60%+</span> buyers in control · 45–55% balanced · <span class="neg">40% or less</span> sellers in control.</li>
+        <li><b>Ask vol %</b> = share of volume traded at the seller's price. <span class="pos">Ask ≥ 60%</span> buying pressure · between balanced · <span class="neg">Bid ≥ 60%</span> (Ask ≤ 40%) selling pressure.</li>
       </ul>
       <p><b>Location × aggression matrix</b> — find the row that matches today:</p>
       <table class="mx">
@@ -248,7 +256,10 @@ function buyShare(B,from){let b=0,t=0;B.slice(Math.max(0,from)).forEach(r=>{b+=s
 /* ===== ANCHORED CUMULATIVE DELTA (CVD) =====
    delta = ask (buy) vol - bid (sell) vol per day; CVD is summed from the same anchor bar as the AVWAP. */
 let DELTA=null, curSym=null;
-function cvdCalc(B,A){let c=0;return B.map((r,i)=>{const v=splitVol(r);const d=v.buy-v.sell;if(!A[i])return{d,c:null,real:v.real,f:v.f};c+=d;return{d,c,real:v.real,f:v.f}})}
+function cvdCalc(B,A){let c=0;const D=B.map((r,i)=>{const v=splitVol(r);const d=v.buy-v.sell;if(!A[i])return{d,c:null,real:v.real,f:v.f,buy:v.buy};c+=d;return{d,c,real:v.real,f:v.f,buy:v.buy}});
+  // 5-day ask share: ask volume / total volume over the last 5 sessions (volume-weighted)
+  D.forEach((x,i)=>{let b=0,t=0;for(let j=Math.max(0,i-4);j<=i;j++){b+=D[j].buy;t+=B[j].volume}x.f5=t?b/t:0.5});return D}
+const OF_LABEL=f=>f>=0.6?['Buying pressure — buyers paying the seller\'s price','pos']:f<=0.4?['Selling pressure — sellers accepting the buyer\'s price','neg']:['Balanced','meta'];
 function flowRead(B,A,D){
   const n=B.length-1,a=A[n],L=B[n];if(!a)return null;
   const ai=A.findIndex(x=>x);const tot=B.slice(ai).reduce((s,r)=>s+r.volume,0);
@@ -343,7 +354,7 @@ function renderFlow(B,A,D){
     <div class="setup"><span class="${r.cls}">${r.read}</span></div>
     ${r.test?`<div class="warn" style="color:var(--${r.test[1]==='pos'?'up':r.test[1]==='neg'?'dn':'av'})">${r.test[0]}</div>`:''}
     ${r.div?`<div class="warn" style="color:var(--${r.div[1]==='pos'?'up':'dn'})">${r.div[0]}</div>`:''}
-    <div class="note">Data: ${r.nReal}/${r.nBars} bars since anchor from broker time &amp; sales; the rest estimated from close position in range (C−L)/(H−L). ${r.nReal<r.nBars?'Estimates can disagree with true bid/ask splits — upload time &amp; sales to tns/ for real data.':''} 60%+ ask = buyers in control, 40%− = sellers.</div>`;
+    <div class="note">Data: ${r.nReal}/${r.nBars} bars since anchor from broker time &amp; sales; the rest estimated from close position in range (C−L)/(H−L). ${r.nReal<r.nBars?'Estimates can disagree with true bid/ask splits — upload time &amp; sales to tns/ for real data.':''} Ask ≥ 60% = buying pressure (buyers paying the seller's price); Bid ≥ 60% = selling pressure (sellers accepting the buyer's price).</div>`;
 }
 function calc(sym){curSym=sym;const B=bars(sym);const c=B.map(b=>b.close);const A=avwap(B,anchors[sym]);return{B,M:macd(c),S:stoch(B),A,D:cvdCalc(B,A)}}
 
@@ -402,22 +413,20 @@ show=function(sym){
   av.setData(pts(a=>a.vw));u1.setData(pts(a=>a.vw+a.sd));l1.setData(pts(a=>a.vw-a.sd));u2.setData(pts(a=>a.vw+2*a.sd));l2.setData(pts(a=>a.vw-2*a.sd));
   const ai=A.findIndex(x=>x);
   if(ai>=0)cand.setMarkers([{time:B[ai].time,position:'belowBar',color:'#f5b400',shape:'arrowUp',text:'Anchor'}]);
-  // Order flow: daily delta (histogram, own overlay scale) + anchored CVD (line, right scale)
-  // Normalised delta: ask (buy) volume as % of the day's total volume, bars drawn from the 50% line.
-  // >=60% = buyers in control, <=40% = sellers in control (trading rules). Delta% = Ask% - Bid% = 2 x Ask% - 100.
-  const pctFmt={type:'custom',formatter:v=>v.toFixed(0)+'%',minMove:1};
-  const dh=cd.addHistogramSeries({base:50,priceFormat:pctFmt,priceLineVisible:false,lastValueVisible:true});
-  dh.applyOptions({autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})});
-  cd.priceScale('right').applyOptions({scaleMargins:{top:0.06,bottom:0.04}});
-  const askCol=(p,real)=>p>=60?(real?'#26a69a':'rgba(38,166,154,.6)'):p<=40?(real?'#ef5350':'rgba(239,83,80,.6)'):(p>=50?'rgba(38,166,154,.22)':'rgba(239,83,80,.22)');
-  dh.setData(B.map((r,i)=>({time:r.time,value:D[i].f*100,color:askCol(D[i].f*100,D[i].real)})));
-  dh.createPriceLine({price:60,color:'#26a69a',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:W>600?'Buyers in control':''});
-  dh.createPriceLine({price:50,color:'#3a414b',lineWidth:1,lineStyle:3,axisLabelVisible:false});
-  dh.createPriceLine({price:40,color:'#ef5350',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:W>600?'Sellers in control':''});
-  const cl=cd.addLineSeries({priceScaleId:'cvd',color:'#c792ea',lineWidth:2,priceLineVisible:false,lastValueVisible:false,priceFormat:{type:'volume'},crosshairMarkerVisible:false});
-  cl.setData(B.map((r,i)=>D[i].c!=null?{time:r.time,value:D[i].c}:{time:r.time}));
-  cd.priceScale('cvd').applyOptions({scaleMargins:{top:0.08,bottom:0.08}}); // anchored CVD line, overlaid on its own scale
-  cl.createPriceLine({price:0,color:'#3a414b',lineWidth:1,lineStyle:2,axisLabelVisible:false});
+  // Order flow: 5-day Ask % line on one linear axis (daily split is in the price-chart volume bars) read as Ask % / Bid % (Bid % = 100 - Ask %).
+  // Ask >= 60% = buying pressure (buyers paying the seller's price); Bid >= 60% = selling pressure (sellers accepting the buyer's price).
+  const abFmt={type:'custom',formatter:v=>{const a=Math.max(0,Math.min(100,Math.round(v)));return `${a}/${100-a}`},minMove:1};
+  const fix={autoscaleInfoProvider:()=>({priceRange:{minValue:0,maxValue:100}})};
+  const zoneOpt={priceFormat:abFmt,lastValueVisible:false,priceLineVisible:false,crosshairMarkerVisible:false,lineWidth:1,topLineColor:'rgba(0,0,0,0)',bottomLineColor:'rgba(0,0,0,0)',...fix};
+  const zUp=cd.addBaselineSeries({...zoneOpt,baseValue:{type:'price',price:60},topFillColor1:'rgba(38,166,154,.16)',topFillColor2:'rgba(38,166,154,.16)',bottomFillColor1:'rgba(0,0,0,0)',bottomFillColor2:'rgba(0,0,0,0)'});
+  const zDn=cd.addBaselineSeries({...zoneOpt,baseValue:{type:'price',price:40},topFillColor1:'rgba(0,0,0,0)',topFillColor2:'rgba(0,0,0,0)',bottomFillColor1:'rgba(239,83,80,.16)',bottomFillColor2:'rgba(239,83,80,.16)'});
+  zUp.setData(B.map(r=>({time:r.time,value:100})));zDn.setData(B.map(r=>({time:r.time,value:0})));
+  cd.priceScale('right').applyOptions({scaleMargins:{top:0.05,bottom:0.05}});
+  const of5=cd.addLineSeries({priceFormat:abFmt,color:'#58a6ff',lineWidth:2,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:false,...fix});
+  of5.setData(B.map((r,i)=>i>=4?{time:r.time,value:D[i].f5*100}:{time:r.time}));
+  of5.createPriceLine({price:60,color:'#26a69a',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:W>600?'Buying pressure':''});
+  of5.createPriceLine({price:50,color:'#3a414b',lineWidth:1,lineStyle:3,axisLabelVisible:false});
+  of5.createPriceLine({price:40,color:'#ef5350',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:W>600?'Selling pressure':''});
   // MACD
   const hs=cm.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
   hs.setData(B.map((r,i)=>M[i]?{time:r.time,value:M[i].h,color:M[i].h>=0?(i&&M[i-1]&&M[i].h>=M[i-1].h?'#26a69a':'rgba(38,166,154,.5)'):(i&&M[i-1]&&M[i].h<=M[i-1].h?'#ef5350':'rgba(239,83,80,.5)')}:{time:r.time}));
@@ -436,7 +445,8 @@ show=function(sym){
   const lg=(i)=>{const r=B[i],a=A[i],m=M[i],s=S[i];
     document.getElementById('lgP').innerHTML=`<b>${b.nm}</b> ${r.time} O ${f2(r.open)} H ${f2(r.high)} L ${f2(r.low)} C ${f2(r.close)} Vol ${(r.volume/1e6).toFixed(2)}M <span class="pos">Ask ${(splitVol(r).buy/1e6).toFixed(2)}M (${(splitVol(r).f*100).toFixed(0)}%)</span> <span class="neg">Bid ${(splitVol(r).sell/1e6).toFixed(2)}M</span> <span style="color:#f5b400">AVWAP ${a?f2(a.vw):'—'}</span> <span style="color:rgba(245,180,0,.7)">±1σ ${a?f2(a.vw-a.sd)+' / '+f2(a.vw+a.sd):'—'}</span>`;
     const dd=D[i],M1=x=>(x>=0?'+':'')+(x/1e6).toFixed(2)+'M';
-    document.getElementById('lgD').innerHTML=`Order flow ${dd.real?'<span class="pos">(time &amp; sales)</span>':'<span class="meta">(estimated)</span>'} · Ask <b class="${dd.f>=0.6?'pos':dd.f<=0.4?'neg':''}">${(dd.f*100).toFixed(0)}%</b> of volume${dd.f>=0.6?' <span class="pos">→ buyers in control</span>':dd.f<=0.4?' <span class="neg">→ sellers in control</span>':' <span class="meta">→ balanced</span>'} · Δ% <span class="${sgn(dd.d)}">${dd.f>=0.5?'+':''}${((2*dd.f-1)*100).toFixed(0)}%</span> <span class="meta">(${M1(dd.d)})</span> · <span style="color:#c792ea">Anchored CVD ${dd.c==null?'—':M1(dd.c)}</span>`;
+    const ab=f=>`Ask <b class="${f>=0.6?'pos':''}">${(f*100).toFixed(0)}%</b> / Bid <b class="${f<=0.4?'neg':''}">${((1-f)*100).toFixed(0)}%</b>`;const o5=OF_LABEL(dd.f5);
+    document.getElementById('lgD').innerHTML=`Order flow ${dd.real?'<span class="pos">(time &amp; sales)</span>':'<span class="meta">(estimated)</span>'} · <span style="color:#58a6ff">5-day</span> ${ab(dd.f5)} <span class="${o5[1]}">→ ${o5[0]}</span> · Day ${ab(dd.f)} <span class="meta">· axis = Ask % / Bid %</span>`;
     document.getElementById('lgM').innerHTML=`MACD (12,26,9) <span style="color:#58a6ff">${f3(m&&m.m)}</span> <span style="color:#ff9f43">${f3(m&&m.s)}</span> <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span>`;
     document.getElementById('lgS').innerHTML=`Stoch (14,3,3) <span style="color:#58a6ff">%K ${f2(s.k)}</span> <span style="color:#ff9f43">%D ${f2(s.d)}</span>`;};
   lg(n-1);
