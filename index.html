@@ -78,6 +78,7 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
 #histTbl tr.bf td{opacity:.85}
 #histTbl td:first-child,#histTbl th:first-child{position:sticky;left:0;z-index:1;background:#161b22}
 #histTbl th:first-child{background:#1c2128;z-index:2}
+.wk-h{margin:14px 6px 2px;padding-top:10px;border-top:1px solid var(--line);font-weight:600;font-size:13px}
 @media(max-width:900px){.summary{grid-template-columns:1fr}.main{grid-template-columns:1fr}}
 </style>
 </head>
@@ -98,6 +99,9 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
     <div class="pane-l" id="lgD"></div><div id="cD"></div>
     <div class="pane-l" id="lgM"></div><div id="cM"></div>
     <div class="pane-l" id="lgS"></div><div id="cS"></div>
+    <div class="wk-h">Weekly <span class="meta">— each bar = one SGX trading week (Mon–Fri)</span></div>
+    <div class="pane-l" id="lgW"></div><div id="cW"></div>
+    <div class="pane-l" id="lgWM"></div><div id="cWM"></div>
   </div>
   <div class="side">
     <h3 id="sideT"></h3>
@@ -208,6 +212,12 @@ const bars = s => RAW[s].map(r=>({time:day(r[0]),open:r[1],high:r[2],low:r[3],cl
 
 function ema(a,n){const k=2/(n+1);const o=[];let e=null;a.forEach((v,i)=>{e=i===0?v:v*k+e*(1-k);o.push(e)});return o}
 function sma(a,n){return a.map((v,i)=>{if(i<n-1||a.slice(i-n+1,i+1).some(x=>x==null))return null;let s=0;for(let j=i-n+1;j<=i;j++)s+=a[j];return s/n})}
+/* ===== WEEKLY BARS: built from the daily bars, one bar per Mon–Fri week (dated by its first trading day) ===== */
+function weekly(B){const W=[];let cur=null,key=null;
+  B.forEach(r=>{const d=new Date(r.time+'T00:00:00Z');const mon=new Date(d);mon.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));const k=mon.toISOString().slice(0,10);
+    if(k!==key){key=k;cur={time:r.time,open:r.open,high:r.high,low:r.low,close:r.close,volume:r.volume,last:r.time,days:1};W.push(cur)}
+    else{cur.high=Math.max(cur.high,r.high);cur.low=Math.min(cur.low,r.low);cur.close=r.close;cur.volume+=r.volume;cur.last=r.time;cur.days++}});
+  return W}
 function macd(c){const f=ema(c,12),s=ema(c,26);const m=c.map((_,i)=>f[i]-s[i]);const sg=ema(m,9);return c.map((_,i)=>i<25?null:{m:m[i],s:sg[i],h:m[i]-sg[i]})}
 function stoch(B){const raw=B.map((b,i)=>{if(i<13)return null;let hh=-1e9,ll=1e9;for(let j=i-13;j<=i;j++){hh=Math.max(hh,B[j].high);ll=Math.min(ll,B[j].low)}return hh===ll?50:100*(b.close-ll)/(hh-ll)});const k=sma(raw,3);const d=sma(k,3);return B.map((_,i)=>({k:k[i],d:d[i]}))}
 function avwap(B,a){let pv=0,v=0,pv2=0;return B.map(b=>{if(b.time<a)return null;const tp=(b.high+b.low+b.close)/3;pv+=tp*b.volume;v+=b.volume;pv2+=tp*tp*b.volume;const vw=pv/v;const sd=Math.sqrt(Math.max(pv2/v-vw*vw,0));return{vw,sd}})}
@@ -386,13 +396,13 @@ function renderSummary(active){
   });
 }
 
-let charts=[];var show;
+let charts=[],wcharts=[];var show;
 const baseOpt=h=>({height:h,layout:{background:{color:'#161b22'},textColor:'#8b949e',fontSize:11},grid:{vertLines:{color:'#1f252e'},horzLines:{color:'#1f252e'}},rightPriceScale:{borderColor:'#262c36',minimumWidth:70},timeScale:{borderColor:'#262c36'},crosshair:{mode:0}});
 
 show=function(sym){
   const b=BANKS.find(x=>x.sym===sym);
   try{localStorage.setItem('bank',sym)}catch(e){}
-  charts.forEach(c=>c.remove());charts=[];
+  charts.forEach(c=>c.remove());charts=[];wcharts.forEach(c=>c.remove());wcharts=[];
   const {B,M,S,A,D}=calc(sym);
   const W=document.getElementById('cP').parentElement.clientWidth-12;
   const cp=LightweightCharts.createChart(document.getElementById('cP'),{...baseOpt(430),width:W});
@@ -452,6 +462,33 @@ show=function(sym){
   lg(n-1);
   const idx={};B.forEach((r,i)=>idx[r.time]=i);
   charts.forEach(c=>c.subscribeCrosshairMove(p=>{if(!p||!p.time){lg(n-1);return}const t=typeof p.time==='string'?p.time:`${p.time.year}-${String(p.time.month).padStart(2,'0')}-${String(p.time.day).padStart(2,'0')}`;if(idx[t]!=null)lg(idx[t])}));
+  // ===== Weekly: candles + EMA 13 / EMA 26, and weekly MACD (12,26,9) =====
+  {
+    const WB=weekly(B),wc=WB.map(r=>r.close),e13=ema(wc,13),e26=ema(wc,26),WM=macd(wc),nw=WB.length;
+    const cw=LightweightCharts.createChart(document.getElementById('cW'),{...baseOpt(300),width:W});
+    const cwm=LightweightCharts.createChart(document.getElementById('cWM'),{...baseOpt(150),width:W});
+    wcharts=[cw,cwm];
+    const wcand=cw.addCandlestickSeries({upColor:'#26a69a',downColor:'#ef5350',borderVisible:false,wickUpColor:'#26a69a',wickDownColor:'#ef5350'});
+    wcand.setData(WB.map(r=>({time:r.time,open:r.open,high:r.high,low:r.low,close:r.close})));
+    const el=(c)=>cw.addLineSeries({color:c,lineWidth:2,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:false});
+    const s13=el('#58a6ff'),s26=el('#ff9f43');
+    s13.setData(WB.map((r,i)=>i>=12?{time:r.time,value:e13[i]}:{time:r.time}));
+    s26.setData(WB.map((r,i)=>i>=25?{time:r.time,value:e26[i]}:{time:r.time}));
+    const wh=cwm.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
+    wh.setData(WB.map((r,i)=>WM[i]?{time:r.time,value:WM[i].h,color:WM[i].h>=0?(i&&WM[i-1]&&WM[i].h>=WM[i-1].h?'#26a69a':'rgba(38,166,154,.5)'):(i&&WM[i-1]&&WM[i].h<=WM[i-1].h?'#ef5350':'rgba(239,83,80,.5)')}:{time:r.time}));
+    const wml=cwm.addLineSeries({color:'#58a6ff',lineWidth:2,priceLineVisible:false});wml.setData(WB.map((r,i)=>WM[i]?{time:r.time,value:WM[i].m}:{time:r.time}));
+    const wsl=cwm.addLineSeries({color:'#ff9f43',lineWidth:1.5,priceLineVisible:false});wsl.setData(WB.map((r,i)=>WM[i]?{time:r.time,value:WM[i].s}:{time:r.time}));
+    wml.createPriceLine({price:0,color:'#3a414b',lineWidth:1,lineStyle:2,axisLabelVisible:false});
+    let wlock=false;wcharts.forEach(c=>c.timeScale().subscribeVisibleLogicalRangeChange(r=>{if(wlock||!r)return;wlock=true;wcharts.forEach(o=>o!==c&&o.timeScale().setVisibleLogicalRange(r));wlock=false}));
+    cw.timeScale().setVisibleLogicalRange({from:Math.max(0,nw-80),to:nw+2});
+    const lastDay=B[B.length-1].time,inProg=new Date(lastDay+'T00:00:00Z').getUTCDay()!==5;
+    const wlg=i=>{const r=WB[i],m=WM[i],a13=i>=12?e13[i]:null,a26=i>=25?e26[i]:null;
+      let tr='';if(a13!=null&&a26!=null){tr=r.close>a13&&a13>a26?'<span class="pos">Uptrend — close above EMA 13 &gt; EMA 26</span>':r.close<a13&&a13<a26?'<span class="neg">Downtrend — close below EMA 13 &lt; EMA 26</span>':`<span class="amb">Mixed — EMA 13 ${a13>a26?'above':'below'} EMA 26, close ${r.close>a13?'above':'below'} EMA 13</span>`}
+      document.getElementById('lgW').innerHTML=`<b>${b.nm} weekly</b> w/c ${r.time}${i===nw-1&&inProg?' <span class="amb">(week in progress)</span>':''} O ${f2(r.open)} H ${f2(r.high)} L ${f2(r.low)} C ${f2(r.close)} <span style="color:#58a6ff">EMA 13 ${f2(a13)}</span> <span style="color:#ff9f43">EMA 26 ${f2(a26)}</span> · ${tr}`;
+      document.getElementById('lgWM').innerHTML=`Weekly MACD (12,26,9) <span style="color:#58a6ff">${f3(m&&m.m)}</span> <span style="color:#ff9f43">${f3(m&&m.s)}</span> <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span>${m?(m.h>=0?' <span class="pos">· above signal</span>':' <span class="neg">· below signal</span>'):' <span class="meta">· needs 26+ weeks of data</span>'}`;};
+    wlg(nw-1);const widx={};WB.forEach((r,i)=>widx[r.time]=i);
+    wcharts.forEach(c=>c.subscribeCrosshairMove(p=>{if(!p||!p.time){wlg(nw-1);return}const t=typeof p.time==='string'?p.time:`${p.time.year}-${String(p.time.month).padStart(2,'0')}-${String(p.time.day).padStart(2,'0')}`;if(widx[t]!=null)wlg(widx[t])}));
+  }
   // side
   document.getElementById('sideT').textContent=`${b.nm} (${sym})`;
   const inp=document.getElementById('anc'),msg=document.getElementById('ancMsg');
