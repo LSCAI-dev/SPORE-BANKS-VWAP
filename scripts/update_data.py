@@ -3,7 +3,7 @@
 Why not plain yfinance: on some runs yfinance's period="1y" request returned
 data that stopped a few sessions short (e.g. ended 13 Nov while Yahoo already
 had 16-17 Nov). This version:
-  1. calls Yahoo's chart API directly for range=1y AND range=5d, and lets the
+  1. calls Yahoo's chart API directly for range=2y AND range=5d, and lets the
      fresher 5-day bars override the 1-year bars by date;
   2. falls back to yfinance with explicit start/end dates if the direct call fails;
   3. merges with the existing data.json so bars are never lost and the file
@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 SYMBOLS = ["D05.SI", "O39.SI", "U11.SI"]   # DBS, OCBC, UOB
-KEEP_DAYS = 400                             # calendar days of history kept in data.json
+KEEP_DAYS = 800                             # ~2 years kept in data.json (weekly EMA 26 / MACD need the history)
 OUT = Path(__file__).resolve().parent.parent / "data.json"
 HOSTS = ["query1.finance.yahoo.com", "query2.finance.yahoo.com"]
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
@@ -88,7 +88,7 @@ def main():
     for s in SYMBOLS:
         merged = {r[0]: r for r in old.get(s, [])}        # 1) keep what we already have
         try:
-            merged.update(chart(s, "1y"))                   # 2) 1-year history
+            merged.update(chart(s, "2y"))                   # 2) 2-year history
             merged.update(chart(s, "5d"))                   # 3) freshest bars win
             src = "chart API"
         except Exception as e:
