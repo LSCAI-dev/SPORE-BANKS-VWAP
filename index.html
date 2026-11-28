@@ -80,35 +80,58 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
 #histTbl td:first-child,#histTbl th:first-child{position:sticky;left:0;z-index:1;background:#161b22}
 #histTbl th:first-child{background:#1c2128;z-index:2}
 .wk-h{margin:14px 6px 2px;padding-top:10px;border-top:1px solid var(--line);font-weight:600;font-size:13px}
+.tabs{display:flex;gap:4px;padding:2px 18px 8px;flex-wrap:wrap;position:sticky;top:0;z-index:20;background:var(--bg)}
+.tabs button{background:transparent;border:1px solid var(--line);border-radius:8px;padding:7px 14px;font-size:13px;color:var(--mut)}
+.tabs button.on{background:#1f6feb;border-color:#1f6feb;color:#fff;font-weight:600}
+.tabs .tsub{font-size:11px;opacity:.75;font-weight:400}
+.main.noside{grid-template-columns:1fr}
+.summary.compact .kv,.summary.compact .tag,.summary.compact .card>div:last-child{display:none}
+.summary.compact .card{padding:8px 12px}
+.board-wrap{padding:6px 18px}
+#board{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto}
+#board table{min-width:760px;font-size:12.5px}
+#board th{color:var(--mut);font-weight:500;text-align:left;padding:6px;border-bottom:1px solid var(--line);white-space:nowrap}
+#board td{padding:7px 6px;vertical-align:top;border-bottom:1px solid var(--line)}
+#board td:last-child{text-align:left}
+#board .go{font-size:11.5px;padding:3px 8px;margin:2px 4px 0 0}
 @media(max-width:900px){.summary{grid-template-columns:1fr}.main{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <header>
-  <h1>Singapore Banks — Anchored VWAP · MACD (12,26,9) · Stochastic (14,3,3)</h1>
+  <h1>Singapore Banks — DBS · OCBC · UOB</h1>
   <div class="meta" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
   <span id="asof">Loading data…</span>
   <button id="reload">↻ Reload data</button>
   <a href="cvd.html" style="color:var(--acc);text-decoration:none;font-size:12px;border:1px solid var(--line);border-radius:5px;padding:3px 9px;white-space:nowrap">📊 Anchored CVD</a>
 </div>
 </header>
+<nav class="tabs" id="tabs">
+  <button data-t="overview">Overview</button>
+  <button data-t="avwap">AVWAP <span class="tsub">Setups A &amp; B</span></button>
+  <button data-t="momentum">Momentum <span class="tsub">Setup C</span></button>
+  <button data-t="weekly">Weekly</button>
+</nav>
 <div class="summary" id="summary"></div>
-<div class="main">
+<div data-tabs="overview" class="board-wrap"><div id="board"></div></div>
+<div class="main" data-tabs="avwap momentum weekly">
   <div class="charts">
-    <div class="pane-l" id="lgP"></div><div id="cP"></div>
+    <div data-tabs="avwap momentum"><div class="pane-l" id="lgP"></div><div id="cP"></div>
     <div class="pane-l" id="lgV" style="padding-top:2px"></div><div id="cV"></div>
     <div class="pane-l" style="padding-top:0"><span><span class="pos">■</span> est. ask volume (at seller's price)</span><span><span class="neg">■</span> est. bid volume (at buyer's price)</span><span id="volSrc">— split by close position in day's range; not true tick-level bid/ask data</span></div>
-    <div class="pane-l" id="lgD"></div><div id="cD"></div>
-    <div class="pane-l" id="lgM"></div><div id="cM"></div>
-    <div class="pane-l" id="lgS"></div><div id="cS"></div>
-    <div class="pane-l" id="lgO"></div><div id="cO"></div>
-    <div class="pane-l" id="lgA"></div><div id="cA"></div>
-    <div class="wk-h">Weekly <span class="meta">— each bar = one SGX trading week (Mon–Fri)</span></div>
+    </div>
+    <div data-tabs="avwap"><div class="pane-l" id="lgD"></div><div id="cD"></div></div>
+    <div data-tabs="avwap momentum"><div class="pane-l" id="lgM"></div><div id="cM"></div></div>
+    <div data-tabs="avwap"><div class="pane-l" id="lgS"></div><div id="cS"></div></div>
+    <div data-tabs="momentum"><div class="pane-l" id="lgO"></div><div id="cO"></div>
+    <div class="pane-l" id="lgA"></div><div id="cA"></div></div>
+    <div data-tabs="weekly"><div class="wk-h">Weekly <span class="meta">— each bar = one SGX trading week (Mon–Fri)</span></div>
     <div class="pane-l" id="lgW"></div><div id="cW"></div>
-    <div class="pane-l" id="lgWM"></div><div id="cWM"></div>
+    <div class="pane-l" id="lgWM"></div><div id="cWM"></div></div>
   </div>
-  <div class="side">
+  <div class="side" data-tabs="avwap momentum">
     <h3 id="sideT"></h3>
+    <div data-tabs="avwap">
     <div class="ancbox">
       <label for="anc">AVWAP anchor date (YYYY-MM-DD)</label>
       <input type="text" id="anc" inputmode="numeric" placeholder="YYYY-MM-DD" maxlength="10" autocomplete="off">
@@ -125,9 +148,9 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
     <div class="note">Bands = AVWAP ± volume-weighted std. dev. of typical price since anchor.</div>
     <h3 style="margin-top:14px">Order flow vs AVWAP</h3>
     <div id="flow"></div>
-    <h3 style="margin-top:14px">Trade setup</h3>
+    <h3 style="margin-top:14px">Trade setup — A &amp; B</h3>
     <div id="setups"></div>
-    <details class="rules"><summary>Trading rules</summary>
+    <details class="rules"><summary>Trading rules — Setups A &amp; B, order flow</summary>
       <p><b>Entry (long) — all 3 on a daily close:</b></p>
       <ol>
         <li><b>Location (AVWAP):</b> close above anchored VWAP, or reclaims it. In an uptrend, a pullback that tags AVWAP or −1σ and closes back above also qualifies.</li>
@@ -145,23 +168,6 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
         <li>No progress in 10 bars → exit.</li>
       </ul>
       <p><b>Setup B (mean reversion):</b> only when price is at or below −1σ. Entry needs the MACD histogram to turn positive with %K &gt; %D from below 20. Stop below the 15-day swing low. Targets −1σ, then AVWAP.</p>
-      <p><b>Setup C — Claude for SGX banks (trend + participation).</b> Long when <b>all 5</b> pass on a daily close:</p>
-      <ol>
-        <li><b>ADX (14) &gt; 20 and +DI &gt; −DI</b> — a strong <i>up</i>trend. ADX (gold line, dashed threshold at 20) measures trend strength in either direction; +DI (teal) above −DI (red) confirms the direction is up. ADX &gt; 20 with −DI above +DI is a strong downtrend and does not qualify.</li>
-        <li><b>EMA 8 &gt; EMA 21</b> — short-term trend up (white and purple lines on the price chart). Crossovers are marked with a bold ✚ at the crossing point: <span class="pos">teal ✚</span> = EMA 8 crosses above EMA 21 (bullish), <span class="neg">red ✚</span> = EMA 8 crosses below (bearish).</li>
-        <li><b>5-day average volume &gt; 20-day average volume</b> — participation is rising (blue 5-day and orange 20-day lines on the volume bars).</li>
-        <li><b>Up/down volume ratio &gt; 1.3×</b> — over the last 20 sessions, volume on up-closes is at least 1.3 × volume on down-closes (up-close = close above the previous close).</li>
-        <li><b>OBV at its 20-day high</b> — On-Balance Volume (adds the day's volume on an up-close, subtracts it on a down-close) is at or above its highest value of the previous 20 sessions, today excluded (dashed green line, OBV pane) — i.e. OBV is making a new 20-session high.</li>
-      </ol>
-      <p><b>Setup C exits</b> (checked on each daily close after entry):</p>
-      <ol>
-        <li><b>Close &lt; EMA 8</b> → sell <b>half</b> the holding.</li>
-        <li><b>Close &lt; EMA 21</b> → sell <b>all</b> that remains.</li>
-        <li><b>Stop: initial 1.5 × ATR, then 2 × ATR trail</b> → sell all if the day's low touches the stop. At entry the stop is the entry close − 1.5 × ATR (14). It then trails at the highest high since entry − 2 × ATR (14), taking over once that is higher than the initial stop. The stop only moves up, never down. Shown as the orange dotted line.</li>
-        <li><b>MACD histogram falls 3 bars in a row</b> → tighten the trail to <b>1 × ATR</b> (highest high − 1 × ATR) for the rest of the trade.</li>
-      </ol>
-      <p>Whichever full exit comes first (EMA 21 or the stop) closes the trade. The app tracks a hypothetical position from each Setup C LONG signal (bought at that day's close) so the current trail and exit status are always shown; markers on the price chart: <span class="pos">▲ C buy</span>, <span class="amb">½</span> half sold, <span class="meta">T</span> trail tightened, <span class="neg">▼ Exit</span>.</p>
-      <p>The bank card shows how many of the 5 pass (e.g. 3 / 5) and turns to <span class="pos">LONG</span> when all 5 pass. Setup C is independent of the AVWAP filters used by Setups A and B.</p>
       <p><b>Status:</b> ENTRY = all 3 filters pass · WAIT = some pass · STAND ASIDE = below AVWAP and MACD histogram negative.</p>
       <h4>Order flow vs AVWAP — how to read it</h4>
       <p><b>The two questions.</b> AVWAP answers <i>“where is price compared with the average price paid since the dividend announcement?”</i> Order flow answers <i>“who is pushing — buyers or sellers?”</i> Read together, they tell you whether a move is real or being quietly resisted.</p>
@@ -205,9 +211,33 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
       <p><b>Data quality.</b> Solid bars use real time &amp; sales from your broker (uploaded to <code>tns/</code>). Faded bars are estimates from where the close sits in the day's range — a close near the high is assumed mostly buying. Estimates are rough and can be wrong on reversal days; trust solid bars more. Auction trades (before 09:00 and from 17:00) are excluded because they have no buyer/seller side.</p>
       <p class="meta">Rules-based screen only, not advice. Verify levels on your broker terminal before acting.</p>
     </details>
+    </div>
+    <div data-tabs="momentum">
+    <h3 style="margin-top:4px">Trade setup — C</h3>
+    <div id="setupsC"></div>
+    <details class="rules"><summary>Trading rules — Setup C</summary>
+      <p><b>Setup C — Claude for SGX banks (trend + participation).</b> Long when <b>all 5</b> pass on a daily close:</p>
+      <ol>
+        <li><b>ADX (14) &gt; 20 and +DI &gt; −DI</b> — a strong <i>up</i>trend. ADX (gold line, dashed threshold at 20) measures trend strength in either direction; +DI (teal) above −DI (red) confirms the direction is up. ADX &gt; 20 with −DI above +DI is a strong downtrend and does not qualify.</li>
+        <li><b>EMA 8 &gt; EMA 21</b> — short-term trend up (white and purple lines on the price chart). Crossovers are marked with a bold ✚ at the crossing point: <span class="pos">teal ✚</span> = EMA 8 crosses above EMA 21 (bullish), <span class="neg">red ✚</span> = EMA 8 crosses below (bearish).</li>
+        <li><b>5-day average volume &gt; 20-day average volume</b> — participation is rising (blue 5-day and orange 20-day lines on the volume bars).</li>
+        <li><b>Up/down volume ratio &gt; 1.3×</b> — over the last 20 sessions, volume on up-closes is at least 1.3 × volume on down-closes (up-close = close above the previous close).</li>
+        <li><b>OBV at its 20-day high</b> — On-Balance Volume (adds the day's volume on an up-close, subtracts it on a down-close) is at or above its highest value of the previous 20 sessions, today excluded (dashed green line, OBV pane) — i.e. OBV is making a new 20-session high.</li>
+      </ol>
+      <p><b>Setup C exits</b> (checked on each daily close after entry):</p>
+      <ol>
+        <li><b>Close &lt; EMA 8</b> → sell <b>half</b> the holding.</li>
+        <li><b>Close &lt; EMA 21</b> → sell <b>all</b> that remains.</li>
+        <li><b>Stop: initial 1.5 × ATR, then 2 × ATR trail</b> → sell all if the day's low touches the stop. At entry the stop is the entry close − 1.5 × ATR (14). It then trails at the highest high since entry − 2 × ATR (14), taking over once that is higher than the initial stop. The stop only moves up, never down. Shown as the orange dotted line.</li>
+        <li><b>MACD histogram falls 3 bars in a row</b> → tighten the trail to <b>1 × ATR</b> (highest high − 1 × ATR) for the rest of the trade.</li>
+      </ol>
+      <p>Whichever full exit comes first (EMA 21 or the stop) closes the trade. The app tracks a hypothetical position from each Setup C LONG signal (bought at that day's close) so the current trail and exit status are always shown; markers on the price chart: <span class="pos">▲ C buy</span>, <span class="amb">½</span> half sold, <span class="meta">T</span> trail tightened, <span class="neg">▼ Exit</span>.</p>
+      <p>The bank card shows how many of the 5 pass (e.g. 3 / 5) and turns to <span class="pos">LONG</span> when all 5 pass. Setup C is independent of the AVWAP filters used by Setups A and B.</p>
+    </details>
+    </div>
   </div>
 </div>
-<div class="hist">
+<div class="hist" data-tabs="overview">
   <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
     <h3 style="margin:0">Scan history — <span id="histT"></span></h3>
     <div><button id="histMore">Show all</button> <a id="csvLink" href="scan_log.csv" download style="margin-left:8px;color:var(--acc);font-size:12px">⬇ Download CSV (all banks)</a></div>
@@ -416,10 +446,11 @@ function renderSetups(sym){
     <tr><td>Invalidation</td><td style="font-size:11px">${s.inval}</td></tr></table>
     ${s.r1<1?`<div class="warn">Target 1 is below 1R — weak reward:risk; prefer waiting for a better entry.</div>`:''}
     <div class="note">Size = (capital × 1%) ÷ ${f2(s.risk)}</div></div>`});
+  let hc='';
   { // Setup C — Claude for SGX banks
     const B=calc(sym).B,C=setupC(B),n=B.length-1,k=C.at(n),V=x=>(x/1e6).toFixed(2)+'M';
     const last=C.cross.length?C.cross[C.cross.length-1]:null;
-    h+=`<div class="setup" style="border-color:${k.long?'var(--up)':'var(--line)'}"><div class="sn">C · Claude for SGX banks <span class="status ${k.long?'pos':k.n>=3?'amb':'neg'}" style="font-size:10.5px;padding:1px 6px;margin-left:4px">${k.long?'LONG':k.n+' / 5'}</span></div>
+    hc+=`<div class="setup" style="border-color:${k.long?'var(--up)':'var(--line)'}"><div class="sn">C · Claude for SGX banks <span class="status ${k.long?'pos':k.n>=3?'amb':'neg'}" style="font-size:10.5px;padding:1px 6px;margin-left:4px">${k.long?'LONG':k.n+' / 5'}</span></div>
     <table>
       <tr><td>ADX (14) &gt; 20 and +DI &gt; −DI</td><td>${f2(C.adx[n])} · +DI ${f2(C.pdi[n])} / −DI ${f2(C.mdi[n])} ${ck(k.adx)}</td></tr>
       <tr><td>EMA 8 &gt; EMA 21</td><td>${f2(C.e8[n])} vs ${f2(C.e21[n])} ${ck(k.ema)}</td></tr>
@@ -431,7 +462,7 @@ function renderSetups(sym){
     const T=setupCTrades(B,C),lastEv=T.ev[T.ev.length-1],dn=T.down3(n),cl=B[n].close;
     const alerts=[];
     if(T.hold){if(cl<C.e21[n])alerts.push(['Close < EMA 21 → sell all','neg']);else if(cl<C.e8[n])alerts.push(['Close < EMA 8 → sell half','amb']);if(dn)alerts.push(['MACD histogram down 3 bars → tighten trail to 1 × ATR','amb'])}
-    h+=`<div class="sn" style="margin-top:8px">Setup C exits ${T.hold?`<span class="status pos" style="font-size:10.5px;padding:1px 6px">HOLDING ${T.hold}%</span>`:'<span class="status" style="font-size:10.5px;padding:1px 6px;background:#21262d;color:var(--mut)">FLAT</span>'}</div>
+    hc+=`<div class="sn" style="margin-top:8px">Setup C exits ${T.hold?`<span class="status pos" style="font-size:10.5px;padding:1px 6px">HOLDING ${T.hold}%</span>`:'<span class="status" style="font-size:10.5px;padding:1px 6px;background:#21262d;color:var(--mut)">FLAT</span>'}</div>
     <table>
       <tr><td>Sell half if close &lt; EMA 8</td><td>${f2(C.e8[n])} ${cl<C.e8[n]?'<span class="neg">below</span>':'<span class="pos">above</span>'}</td></tr>
       <tr><td>Sell all if close &lt; EMA 21</td><td>${f2(C.e21[n])} ${cl<C.e21[n]?'<span class="neg">below</span>':'<span class="pos">above</span>'}</td></tr>
@@ -443,6 +474,7 @@ function renderSetups(sym){
     ${alerts.map(a=>`<div class="warn" style="color:var(--${a[1]==='neg'?'dn':'av'})">${a[0]}</div>`).join('')}
     <div class="note">Hypothetical position from Setup C signals: C buy at the signal day's close; markers on the price chart show C buy ▲, ½ sell, T tighten, Exit ▼; orange dotted line = stop (1.5 × ATR initial, then 2 × ATR trail).</div></div>`;
   }
+  document.getElementById('setupsC').innerHTML=hc;
   h+=`<div class="sn" style="margin-top:10px">Exit alerts (if holding)</div>`+(r.exits.length?r.exits.map(e=>`<div class="warn">${e}</div>`).join(''):'<div class="note">None triggered on the last bar.</div>');
   el.innerHTML=h;
 }
@@ -466,6 +498,34 @@ function calc(sym){curSym=sym;const B=bars(sym);const c=B.map(b=>b.close);const 
 const f2=x=>x==null?'—':x.toFixed(2), f3=x=>x==null?'—':x.toFixed(3);
 const sgn=x=>x>=0?'pos':'neg';
 
+/* ===== OVERVIEW BOARD: one row per bank ===== */
+function renderBoard(){
+  const el=document.getElementById('board');
+  const badge=(t,c)=>`<span class="status ${c}" style="font-size:10.5px;padding:1px 7px">${t}</span>`;
+  let rows='';
+  BANKS.forEach(b=>{
+    const {B,A,D}=calc(b.sym),n=B.length-1,L=B[n],P=B[n-1],a=A[n],R=evalRules(b.sym),C=setupC(B),k=C.at(n),T=setupCTrades(B,C);
+    const chg=(L.close/P.close-1)*100,f5=D[n].f5,of=OF_LABEL(f5);
+    const WB=weekly(B),wc=WB.map(x=>x.close),e13=ema(wc,13),e26=ema(wc,26),w=WB.length-1;
+    const wt=wc[w]>e13[w]&&e13[w]>e26[w]?['Up','pos']:wc[w]<e13[w]&&e13[w]<e26[w]?['Down','neg']:['Mixed','amb'];
+    const al=[];
+    if(R){R.exits.forEach(x=>al.push(['A/B: '+x,'amb']))}
+    if(T.hold){if(L.close<C.e21[n])al.push(['C: close < EMA 21 → sell all','neg']);else if(L.close<C.e8[n])al.push(['C: close < EMA 8 → sell half','amb']);if(T.down3(n))al.push(['C: MACD hist down 3 → tighten','amb'])}
+    if(k.long&&!T.hold)al.push(['C: LONG signal','pos']);
+    const last=C.cross.length?C.cross[C.cross.length-1]:null;if(last&&last.i===n)al.push([`EMA 8/21 ${last.up?'bullish':'bearish'} cross today`,last.up?'pos':'neg']);
+    rows+=`<tr>
+      <td><b>${b.nm}</b> <span class="meta">${b.sym.replace('.SI','')}</span><br><span style="font-size:15px;font-weight:600">${f2(L.close)}</span> <span class="${chg>=0?'pos':'neg'}">${chg>=0?'+':''}${chg.toFixed(2)}%</span></td>
+      <td>${R?badge(R.status,R.cls):'—'}<br><span class="meta">AVWAP ${a?f2(a.vw):'—'} (${a?((L.close/a.vw-1)*100).toFixed(1)+'%':'—'})</span></td>
+      <td>${k.long?badge('LONG','pos'):badge(k.n+' / 5',k.n>=3?'amb':'neg')}<br><span class="meta">${T.hold?`Holding ${T.hold}% · stop ${f2(T.tr)}`:'Flat'} · EMA 21 ${f2(C.e21[n])}</span></td>
+      <td>Ask ${(f5*100).toFixed(0)}% / Bid ${((1-f5)*100).toFixed(0)}%<br><span class="${of[1]}" style="font-size:11.5px">${of[0].split(' — ')[0]}</span></td>
+      <td><span class="${wt[1]}">${wt[0]}</span><br><span class="meta">EMA 13 ${f2(e13[w])} / 26 ${f2(e26[w])}</span></td>
+      <td>${al.length?al.map(x=>`<div class="${x[1]}" style="font-size:11.5px">${x[0]}</div>`).join(''):'<span class="meta">None</span>'}</td>
+      <td style="white-space:nowrap"><button class="go" data-s="${b.sym}" data-t="avwap">AVWAP ›</button><button class="go" data-s="${b.sym}" data-t="momentum">Momentum ›</button><button class="go" data-s="${b.sym}" data-t="weekly">Weekly ›</button></td></tr>`;
+  });
+  el.innerHTML=`<table><tr><th>Bank</th><th>Setups A/B (AVWAP)</th><th>Setup C (Momentum)</th><th>Order flow 5-day</th><th>Weekly trend</th><th>Alerts on last bar</th><th></th></tr>${rows}</table>
+    <div class="note" style="margin-top:8px">Daily close data. Click a bank's button to open that tab. Verify levels on your broker terminal before acting.</div>`;
+  el.querySelectorAll('button.go').forEach(x=>x.onclick=()=>{current=x.dataset.s;try{localStorage.setItem('bank',current)}catch(e){};setTab(x.dataset.t)});
+}
 function renderSummary(active){
   const el=document.getElementById('summary');el.innerHTML='';
   BANKS.forEach(b=>{
@@ -480,7 +540,10 @@ function renderSummary(active){
       if(s.k>s.d&&sp.k<=sp.d)tags.push(['%K crossed ↑ %D','pos']);else if(s.k<s.d&&sp.k>=sp.d)tags.push(['%K crossed ↓ %D','neg']);}
     const d=document.createElement('div');d.className='card'+(b.sym===active?' on':'');
     const R=evalRules(b.sym);
-    d.innerHTML=`${R?`<span class="cstat status ${R.cls}">${R.status}</span>`:''}<div class="t"><span class="nm">${b.nm} <span class="meta">${b.sym.replace('.SI','')}</span></span><span class="px">${f2(L.close)}</span></div>
+    const kc=setupC(B).at(n);let bd=R?[R.status,R.cls]:null;
+    if(TAB==='momentum')bd=kc.long?['C: LONG','pos']:['C: '+kc.n+' / 5',kc.n>=3?'amb':'neg'];
+    else if(TAB==='weekly'){const WB=weekly(B),wc=WB.map(x=>x.close),e13=ema(wc,13),e26=ema(wc,26),w=WB.length-1;bd=wc[w]>e13[w]&&e13[w]>e26[w]?['Weekly: Up','pos']:wc[w]<e13[w]&&e13[w]<e26[w]?['Weekly: Down','neg']:['Weekly: Mixed','amb']}
+    d.innerHTML=`${bd?`<span class="cstat status ${bd[1]}">${bd[0]}</span>`:''}<div class="t"><span class="nm">${b.nm} <span class="meta">${b.sym.replace('.SI','')}</span></span><span class="px">${f2(L.close)}</span></div>
     <div class="${sgn(chg)}" style="text-align:right;font-variant-numeric:tabular-nums">${chg>=0?'+':''}${f2(chg)} (${pct>=0?'+':''}${pct.toFixed(2)}%)</div>
     <div class="kv"><span>AVWAP (${anchors[b.sym].slice(5)})</span><span>${a?f2(a.vw):'—'} <span class="${sgn(dist||0)}">${dist==null?'':(dist>=0?'+':'')+dist.toFixed(2)+'%'}</span></span>
     <span>MACD / Sig / Hist</span><span>${f3(m&&m.m)} / ${f3(m&&m.s)} / <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span></span>
@@ -488,7 +551,7 @@ function renderSummary(active){
     <span>Setup C (Claude for SGX banks)</span><span>${(()=>{const k=setupC(B).at(n);return k.long?'<b class="pos">LONG ✓</b>':`<span class="${k.n>=3?'amb':'neg'}">${k.n} / 5</span>`})()}</span>
     <span>Est. ask vol % 1d / 5d / anchor</span><span>${(()=>{const ai=A.findIndex(x=>x);const p=x=>`<span class="${x>=0.5?'pos':'neg'}">${(x*100).toFixed(0)}</span>`;return `${p(buyShare(B,n))} / ${p(buyShare(B,n-4))} / ${p(ai<0?0.5:buyShare(B,ai))}`})()}</span></div>
     <div>${tags.map(t=>`<span class="tag ${t[1]}">${t[0]}</span>`).join('')}</div>`;
-    d.onclick=()=>show(b.sym);el.appendChild(d);
+    d.onclick=()=>{if(TAB==='overview'){current=b.sym;try{localStorage.setItem('bank',current)}catch(e){};setTab('avwap')}else show(b.sym)};el.appendChild(d);
   });
 }
 
@@ -499,8 +562,10 @@ show=function(sym){
   const b=BANKS.find(x=>x.sym===sym);
   try{localStorage.setItem('bank',sym)}catch(e){}
   charts.forEach(c=>c.remove());charts=[];wcharts.forEach(c=>c.remove());wcharts=[];
+  if(TAB==='overview'){renderSummary(sym);renderBoard();renderHistory(sym);return}
+  const AV=TAB==='avwap',MO=TAB==='momentum';
   const {B,M,S,A,D}=calc(sym);
-  const W=document.getElementById('cP').parentElement.clientWidth-12;
+  const W=document.querySelector('.charts').clientWidth-12;
   const cp=LightweightCharts.createChart(document.getElementById('cP'),{...baseOpt(360),width:W});
   const cv=LightweightCharts.createChart(document.getElementById('cV'),{...baseOpt(150),width:W});
   const cd=LightweightCharts.createChart(document.getElementById('cD'),{...baseOpt(180),width:W});
@@ -520,15 +585,16 @@ show=function(sym){
   volT.setData(B.map(r=>({time:r.time,value:r.volume,color:'rgba(239,83,80,.55)'})));          // full bar = total; red part showing = est. bid (sell)
   volB.setData(B.map(r=>({time:r.time,value:splitVol(r).buy,color:'rgba(38,166,154,.75)'})));  // green from 0 = est. ask (buy)
   const line=(c,w,s)=>cp.addLineSeries({color:c,lineWidth:w,lineStyle:s||0,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:false});
-  const av=line('#f5b400',2),u1=line('rgba(245,180,0,.55)',1,2),l1=line('rgba(245,180,0,.55)',1,2),u2=line('rgba(245,180,0,.3)',1,1),l2=line('rgba(245,180,0,.3)',1,1);
+  if(AV){const av=line('#f5b400',2),u1=line('rgba(245,180,0,.55)',1,2),l1=line('rgba(245,180,0,.55)',1,2),u2=line('rgba(245,180,0,.3)',1,1),l2=line('rgba(245,180,0,.3)',1,1);
   const pts=(fn)=>B.map((r,i)=>A[i]?{time:r.time,value:fn(A[i])}:null).filter(Boolean);
-  av.setData(pts(a=>a.vw));u1.setData(pts(a=>a.vw+a.sd));l1.setData(pts(a=>a.vw-a.sd));u2.setData(pts(a=>a.vw+2*a.sd));l2.setData(pts(a=>a.vw-2*a.sd));
+  av.setData(pts(a=>a.vw));u1.setData(pts(a=>a.vw+a.sd));l1.setData(pts(a=>a.vw-a.sd));u2.setData(pts(a=>a.vw+2*a.sd));l2.setData(pts(a=>a.vw-2*a.sd));}
   const ai=A.findIndex(x=>x);
   // Setup C: EMA 8 / EMA 21 with crossover points marked by a bold +
+  const T=setupCTrades(B,C);
+  if(MO){
   const em=(c)=>cp.addLineSeries({color:c,lineWidth:1.5,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
   const s8=em('#e6edf3'),s21=em('#c792ea');
   s8.setData(B.map((r,i)=>i>=7?{time:r.time,value:C.e8[i]}:{time:r.time}));s21.setData(B.map((r,i)=>i>=20?{time:r.time,value:C.e21[i]}:{time:r.time}));
-  const T=setupCTrades(B,C);
   { // one stop line per trade, so flat periods show no line
     let seg=[];const flush=last=>{if(seg.length){const l=cp.addLineSeries({color:'#ff9f43',lineWidth:1.5,lineStyle:1,priceLineVisible:false,lastValueVisible:last&&!!T.hold,crosshairMarkerVisible:false});l.setData(seg);seg=[]}};
     B.forEach((r,i)=>{if(T.trail[i]!=null)seg.push({time:r.time,value:T.trail[i]});else flush(false)});flush(true);
@@ -537,13 +603,14 @@ show=function(sym){
     e.t==='half'?{time:B[e.i].time,position:'aboveBar',color:'#ff9f43',shape:'circle',text:'½'}:
     e.t==='tighten'?{time:B[e.i].time,position:'aboveBar',color:'#8b949e',shape:'square',text:'T'}:
     {time:B[e.i].time,position:'aboveBar',color:'#ef5350',shape:'arrowDown',text:'Exit'});
-  if(ai>=0)mks.push({time:B[ai].time,position:'belowBar',color:'#f5b400',shape:'arrowUp',text:'Anchor'});
-  mks.sort((x,y)=>x.time<y.time?-1:x.time>y.time?1:0);cand.setMarkers(mks);
+  cand.setMarkers(mks);
   s8.attachPrimitive(crossMarks(C.cross.map(x=>({time:B[x.i].time,value:(C.e8[x.i]+C.e21[x.i])/2,color:x.up?'#26a69a':'#ef5350'}))));
+  }
+  if(AV&&ai>=0)cand.setMarkers([{time:B[ai].time,position:'belowBar',color:'#f5b400',shape:'arrowUp',text:'Anchor'}]);
   // volume averages (same 'vol' scale as the volume bars)
   const va=(c)=>cv.addLineSeries({color:c,lineWidth:2,priceFormat:vFmt,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:false});
-  const sv5=va('#58a6ff'),sv20=va('#ff9f43');
-  sv5.setData(B.map((r,i)=>C.v5[i]!=null?{time:r.time,value:C.v5[i]}:{time:r.time}));sv20.setData(B.map((r,i)=>C.v20[i]!=null?{time:r.time,value:C.v20[i]}:{time:r.time}));
+  if(MO){const sv5=va('#58a6ff'),sv20=va('#ff9f43');
+  sv5.setData(B.map((r,i)=>C.v5[i]!=null?{time:r.time,value:C.v5[i]}:{time:r.time}));sv20.setData(B.map((r,i)=>C.v20[i]!=null?{time:r.time,value:C.v20[i]}:{time:r.time}));}
   // OBV with its 20-day high as the threshold
   const so=co.addLineSeries({color:'#58a6ff',lineWidth:2,priceFormat:{type:'volume'},priceLineVisible:false,crosshairMarkerVisible:false});
   so.setData(B.map((r,i)=>({time:r.time,value:C.obv[i]})));
@@ -586,15 +653,15 @@ show=function(sym){
   const n=B.length;cp.timeScale().setVisibleLogicalRange({from:n-130,to:n+3});
   // legends
   const lg=(i)=>{const r=B[i],a=A[i],m=M[i],s=S[i];
-    document.getElementById('lgP').innerHTML=`<b>${b.nm}</b> ${r.time} O ${f2(r.open)} H ${f2(r.high)} L ${f2(r.low)} C ${f2(r.close)} Vol ${(r.volume/1e6).toFixed(2)}M <span class="pos">Ask ${(splitVol(r).buy/1e6).toFixed(2)}M (${(splitVol(r).f*100).toFixed(0)}%)</span> <span class="neg">Bid ${(splitVol(r).sell/1e6).toFixed(2)}M</span> <span style="color:#f5b400">AVWAP ${a?f2(a.vw):'—'}</span> <span style="color:rgba(245,180,0,.7)">±1σ ${a?f2(a.vw-a.sd)+' / '+f2(a.vw+a.sd):'—'}</span>`;
+    document.getElementById('lgP').innerHTML=`<b>${b.nm}</b> ${r.time} O ${f2(r.open)} H ${f2(r.high)} L ${f2(r.low)} C ${f2(r.close)} Vol ${(r.volume/1e6).toFixed(2)}M <span class="pos">Ask ${(splitVol(r).buy/1e6).toFixed(2)}M (${(splitVol(r).f*100).toFixed(0)}%)</span> <span class="neg">Bid ${(splitVol(r).sell/1e6).toFixed(2)}M</span>${AV?` <span style="color:#f5b400">AVWAP ${a?f2(a.vw):'—'}</span> <span style="color:rgba(245,180,0,.7)">±1σ ${a?f2(a.vw-a.sd)+' / '+f2(a.vw+a.sd):'—'}</span>`:''}`;
     const dd=D[i],M1=x=>(x>=0?'+':'')+(x/1e6).toFixed(2)+'M';
     const ab=f=>`Ask <b class="${f>=0.6?'pos':''}">${(f*100).toFixed(0)}%</b> / Bid <b class="${f<=0.4?'neg':''}">${((1-f)*100).toFixed(0)}%</b>`;const o5=OF_LABEL(dd.f5);
     document.getElementById('lgD').innerHTML=`Order flow ${dd.real?'<span class="pos">(time &amp; sales)</span>':'<span class="meta">(estimated)</span>'} · <span style="color:#58a6ff">5-day</span> ${ab(dd.f5)} <span class="${o5[1]}">→ ${o5[0]}</span> · Day ${ab(dd.f)} <span class="meta">· axis = Ask % / Bid %</span>`;
     document.getElementById('lgM').innerHTML=`MACD (12,26,9) <span style="color:#58a6ff">${f3(m&&m.m)}</span> <span style="color:#ff9f43">${f3(m&&m.s)}</span> <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span>`;
     document.getElementById('lgS').innerHTML=`Stoch (14,3,3) <span style="color:#58a6ff">%K ${f2(s.k)}</span> <span style="color:#ff9f43">%D ${f2(s.d)}</span>`;;
     const V=x=>x==null?'—':(x/1e6).toFixed(2)+'M',k=C.at(i);
-    document.getElementById('lgP').innerHTML+=` · <span style="color:#e6edf3">EMA 8 ${f2(C.e8[i])}</span> <span style="color:#c792ea">EMA 21 ${f2(C.e21[i])}</span>`;
-    document.getElementById('lgV').innerHTML=`Volume ${r.time}: <b>${V(r.volume)}</b> · <span style="color:#58a6ff">━ 5-day avg ${V(C.v5[i])}</span> · <span style="color:#ff9f43">━ 20-day avg ${V(C.v20[i])}</span> ${C.v5[i]!=null&&C.v20[i]!=null?(C.v5[i]>C.v20[i]?'<span class="pos">· 5-day above 20-day ✓</span>':'<span class="meta">· 5-day below 20-day</span>'):''}`;
+    if(MO)document.getElementById('lgP').innerHTML+=` · <span style="color:#e6edf3">EMA 8 ${f2(C.e8[i])}</span> <span style="color:#c792ea">EMA 21 ${f2(C.e21[i])}</span>`;
+    document.getElementById('lgV').innerHTML=`Volume ${r.time}: <b>${V(r.volume)}</b> ${MO?`· <span style="color:#58a6ff">━ 5-day avg ${V(C.v5[i])}</span> · <span style="color:#ff9f43">━ 20-day avg ${V(C.v20[i])}</span> ${C.v5[i]!=null&&C.v20[i]!=null?(C.v5[i]>C.v20[i]?'<span class="pos">· 5-day above 20-day ✓</span>':'<span class="meta">· 5-day below 20-day</span>'):''}`:''}`;
     document.getElementById('lgO').innerHTML=`OBV <span style="color:#58a6ff">${V(C.obv[i])}</span> · <span style="color:#26a69a">prev. 20-session high ${V(C.obvHi[i])}</span> ${k.obv?'<span class="pos">· at / above ✓</span>':'<span class="meta">· below</span>'} · Up/down vol (20d) <b class="${C.udr[i]>1.3?'pos':''}">${C.udr[i]==null?'—':C.udr[i].toFixed(2)+'×'}</b>`;
     document.getElementById('lgA').innerHTML=`ADX (14) <b style="color:#f5b400">${f2(C.adx[i])}</b> · <span class="pos">+DI ${f2(C.pdi[i])}</span> <span class="neg">−DI ${f2(C.mdi[i])}</span> · ${C.adx[i]==null?'':C.adx[i]<=20?'<span class="meta">no trend (ADX ≤ 20)</span>':C.pdi[i]>C.mdi[i]?'<span class="pos">strong uptrend (ADX &gt; 20, +DI &gt; −DI) ✓</span>':'<span class="neg">strong downtrend (ADX &gt; 20, −DI &gt; +DI)</span>'}`};
   lg(n-1);
@@ -661,6 +728,19 @@ show=function(sym){
 
 document.getElementById('foot').innerHTML='Source: Yahoo Finance chart API (query1.finance.yahoo.com), daily OHLCV, prices unadjusted for dividends. Ask/bid volume: from broker time &amp; sales (delta.json, auction prints excluded) where imported, otherwise estimated as ask share = (C−L)/(H−L) of the day’s volume. Order-flow panel: daily delta = ask − bid volume; CVD summed from the AVWAP anchor bar. AVWAP uses typical price (H+L+C)/3 × volume from the anchor bar onward. Dividend announcement dates (config.json): DBS newsroom (6 Aug & 5 Nov 2026), OCBC media release (7 Aug 2026), UOB 1H26 results (7 Aug 2026). Data refreshes on weekdays after SGX close via GitHub Actions — verify against your broker terminal before acting.';
 let current='D05.SI';try{current=localStorage.getItem('bank')||current}catch(e){}
+/* ===== TABS: overview · avwap (Setups A & B) · momentum (Setup C) · weekly ===== */
+const TABS=['overview','avwap','momentum','weekly'];
+let TAB=TABS.includes(location.hash.slice(1))?location.hash.slice(1):'overview';
+function applyTab(){
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===TAB));
+  document.querySelectorAll('[data-tabs]').forEach(el=>{el.style.display=el.dataset.tabs.split(' ').includes(TAB)?'':'none'});
+  document.querySelector('.main').classList.toggle('noside',TAB==='weekly');
+  document.getElementById('summary').classList.toggle('compact',TAB!=='overview');
+}
+function setTab(t){if(!TABS.includes(t))return;TAB=t;try{history.replaceState(null,'',t==='overview'?location.pathname:'#'+t)}catch(e){location.hash=t}applyTab();if(RAW)show(current);window.scrollTo(0,0)}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
+addEventListener('hashchange',()=>{const t=location.hash.slice(1)||'overview';if(t!==TAB&&TABS.includes(t)){TAB=t;applyTab();if(RAW)show(current)}});
+applyTab();
 const _show=show; show=sym=>{current=sym;_show(sym)};
 async function getJSON(f,optional){
   if(window.EMBED&&window.EMBED[f])return window.EMBED[f];
