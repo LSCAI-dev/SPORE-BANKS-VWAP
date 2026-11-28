@@ -96,7 +96,7 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
 <div class="main">
   <div class="charts">
     <div class="pane-l" id="lgP"></div><div id="cP"></div>
-    <div class="pane-l" id="lgV" style="padding-top:2px"></div>
+    <div class="pane-l" id="lgV" style="padding-top:2px"></div><div id="cV"></div>
     <div class="pane-l" style="padding-top:0"><span><span class="pos">■</span> est. ask volume (at seller's price)</span><span><span class="neg">■</span> est. bid volume (at buyer's price)</span><span id="volSrc">— split by close position in day's range; not true tick-level bid/ask data</span></div>
     <div class="pane-l" id="lgD"></div><div id="cD"></div>
     <div class="pane-l" id="lgM"></div><div id="cM"></div>
@@ -501,19 +501,22 @@ show=function(sym){
   charts.forEach(c=>c.remove());charts=[];wcharts.forEach(c=>c.remove());wcharts=[];
   const {B,M,S,A,D}=calc(sym);
   const W=document.getElementById('cP').parentElement.clientWidth-12;
-  const cp=LightweightCharts.createChart(document.getElementById('cP'),{...baseOpt(430),width:W});
+  const cp=LightweightCharts.createChart(document.getElementById('cP'),{...baseOpt(360),width:W});
+  const cv=LightweightCharts.createChart(document.getElementById('cV'),{...baseOpt(150),width:W});
   const cd=LightweightCharts.createChart(document.getElementById('cD'),{...baseOpt(180),width:W});
   const cm=LightweightCharts.createChart(document.getElementById('cM'),{...baseOpt(150),width:W});
   const cs=LightweightCharts.createChart(document.getElementById('cS'),{...baseOpt(150),width:W});
   const co=LightweightCharts.createChart(document.getElementById('cO'),{...baseOpt(140),width:W});
   const ca=LightweightCharts.createChart(document.getElementById('cA'),{...baseOpt(140),width:W});
-  charts=[cp,cd,cm,cs,co,ca];
+  charts=[cp,cv,cd,cm,cs,co,ca];
   const C=setupC(B);
   const cand=cp.addCandlestickSeries({upColor:'#26a69a',downColor:'#ef5350',borderVisible:false,wickUpColor:'#26a69a',wickDownColor:'#ef5350'});
   cand.setData(B.map(({volume,...r})=>r));
-  const vo={priceScaleId:'vol',priceFormat:{type:'volume'},lastValueVisible:false,priceLineVisible:false};
-  const volT=cp.addHistogramSeries(vo),volB=cp.addHistogramSeries(vo);
-  cp.priceScale('vol').applyOptions({scaleMargins:{top:0.78,bottom:0}});
+  // Volume pane with its own axis (millions of shares)
+  const vFmt={type:'custom',formatter:v=>(v/1e6).toFixed(2)+'M',minMove:1};
+  const vo={priceFormat:vFmt,lastValueVisible:false,priceLineVisible:false};
+  const volT=cv.addHistogramSeries(vo),volB=cv.addHistogramSeries(vo);
+  cv.priceScale('right').applyOptions({scaleMargins:{top:0.08,bottom:0}});
   volT.setData(B.map(r=>({time:r.time,value:r.volume,color:'rgba(239,83,80,.55)'})));          // full bar = total; red part showing = est. bid (sell)
   volB.setData(B.map(r=>({time:r.time,value:splitVol(r).buy,color:'rgba(38,166,154,.75)'})));  // green from 0 = est. ask (buy)
   const line=(c,w,s)=>cp.addLineSeries({color:c,lineWidth:w,lineStyle:s||0,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:false});
@@ -538,7 +541,7 @@ show=function(sym){
   mks.sort((x,y)=>x.time<y.time?-1:x.time>y.time?1:0);cand.setMarkers(mks);
   s8.attachPrimitive(crossMarks(C.cross.map(x=>({time:B[x.i].time,value:(C.e8[x.i]+C.e21[x.i])/2,color:x.up?'#26a69a':'#ef5350'}))));
   // volume averages (same 'vol' scale as the volume bars)
-  const va=(c)=>cp.addLineSeries({priceScaleId:'vol',color:c,lineWidth:1.5,priceFormat:{type:'volume'},priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+  const va=(c)=>cv.addLineSeries({color:c,lineWidth:2,priceFormat:vFmt,priceLineVisible:false,lastValueVisible:true,crosshairMarkerVisible:false});
   const sv5=va('#58a6ff'),sv20=va('#ff9f43');
   sv5.setData(B.map((r,i)=>C.v5[i]!=null?{time:r.time,value:C.v5[i]}:{time:r.time}));sv20.setData(B.map((r,i)=>C.v20[i]!=null?{time:r.time,value:C.v20[i]}:{time:r.time}));
   // OBV with its 20-day high as the threshold
