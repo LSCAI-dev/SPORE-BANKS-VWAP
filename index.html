@@ -99,6 +99,8 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
     <div class="pane-l" id="lgD"></div><div id="cD"></div>
     <div class="pane-l" id="lgM"></div><div id="cM"></div>
     <div class="pane-l" id="lgS"></div><div id="cS"></div>
+    <div class="pane-l" id="lgO"></div><div id="cO"></div>
+    <div class="pane-l" id="lgA"></div><div id="cA"></div>
     <div class="wk-h">Weekly <span class="meta">— each bar = one SGX trading week (Mon–Fri)</span></div>
     <div class="pane-l" id="lgW"></div><div id="cW"></div>
     <div class="pane-l" id="lgWM"></div><div id="cWM"></div>
@@ -141,6 +143,23 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
         <li>No progress in 10 bars → exit.</li>
       </ul>
       <p><b>Setup B (mean reversion):</b> only when price is at or below −1σ. Entry needs the MACD histogram to turn positive with %K &gt; %D from below 20. Stop below the 15-day swing low. Targets −1σ, then AVWAP.</p>
+      <p><b>Setup C — Claude for SGX banks (trend + participation).</b> Long when <b>all 5</b> pass on a daily close:</p>
+      <ol>
+        <li><b>ADX (14) &gt; 20 and +DI &gt; −DI</b> — a strong <i>up</i>trend. ADX (gold line, dashed threshold at 20) measures trend strength in either direction; +DI (teal) above −DI (red) confirms the direction is up. ADX &gt; 20 with −DI above +DI is a strong downtrend and does not qualify.</li>
+        <li><b>EMA 8 &gt; EMA 21</b> — short-term trend up (white and purple lines on the price chart). Crossovers are marked with a bold ✚ at the crossing point: <span class="pos">teal ✚</span> = EMA 8 crosses above EMA 21 (bullish), <span class="neg">red ✚</span> = EMA 8 crosses below (bearish).</li>
+        <li><b>5-day average volume &gt; 20-day average volume</b> — participation is rising (blue 5-day and orange 20-day lines on the volume bars).</li>
+        <li><b>Up/down volume ratio &gt; 1.3×</b> — over the last 20 sessions, volume on up-closes is at least 1.3 × volume on down-closes (up-close = close above the previous close).</li>
+        <li><b>OBV at its 20-day high</b> — On-Balance Volume (adds the day's volume on an up-close, subtracts it on a down-close) is at or above its highest value of the previous 20 sessions, today excluded (dashed green line, OBV pane) — i.e. OBV is making a new 20-session high.</li>
+      </ol>
+      <p><b>Setup C exits</b> (checked on each daily close after entry):</p>
+      <ol>
+        <li><b>Close &lt; EMA 8</b> → sell <b>half</b> the holding.</li>
+        <li><b>Close &lt; EMA 21</b> → sell <b>all</b> that remains.</li>
+        <li><b>Stop: initial 1.5 × ATR, then 2 × ATR trail</b> → sell all if the day's low touches the stop. At entry the stop is the entry close − 1.5 × ATR (14). It then trails at the highest high since entry − 2 × ATR (14), taking over once that is higher than the initial stop. The stop only moves up, never down. Shown as the orange dotted line.</li>
+        <li><b>MACD histogram falls 3 bars in a row</b> → tighten the trail to <b>1 × ATR</b> (highest high − 1 × ATR) for the rest of the trade.</li>
+      </ol>
+      <p>Whichever full exit comes first (EMA 21 or the stop) closes the trade. The app tracks a hypothetical position from each Setup C LONG signal (bought at that day's close) so the current trail and exit status are always shown; markers on the price chart: <span class="pos">▲ C buy</span>, <span class="amb">½</span> half sold, <span class="meta">T</span> trail tightened, <span class="neg">▼ Exit</span>.</p>
+      <p>The bank card shows how many of the 5 pass (e.g. 3 / 5) and turns to <span class="pos">LONG</span> when all 5 pass. Setup C is independent of the AVWAP filters used by Setups A and B.</p>
       <p><b>Status:</b> ENTRY = all 3 filters pass · WAIT = some pass · STAND ASIDE = below AVWAP and MACD histogram negative.</p>
       <h4>Order flow vs AVWAP — how to read it</h4>
       <p><b>The two questions.</b> AVWAP answers <i>“where is price compared with the average price paid since the dividend announcement?”</i> Order flow answers <i>“who is pushing — buyers or sellers?”</i> Read together, they tell you whether a move is real or being quietly resisted.</p>
@@ -292,6 +311,53 @@ function flowRead(B,A,D){
   const nReal=D.slice(ai).filter(x=>x.real).length,nBars=n-ai+1;
   return{cv,norm,b5,b1:D[n].f,read,cls,div,test,nReal,nBars,above};
 }
+/* ===== SETUP C — "Claude for SGX banks" (trend + participation) =====
+   EMA 8 / EMA 21 cross, 5- vs 20-day average volume, up/down volume ratio (20 days),
+   OBV vs its 20-day high, ADX 14 (Wilder). */
+function smaArr(a,n){let s=0;return a.map((v,i)=>{s+=v;if(i>=n)s-=a[i-n];return i>=n-1?s/n:null})}
+function adx14(B,n=14){const L=B.length,pdi=Array(L).fill(null),mdi=Array(L).fill(null),adx=Array(L).fill(null);
+  let sTR=0,sP=0,sM=0,dxs=[],a=null;
+  for(let i=1;i<L;i++){const h=B[i].high,l=B[i].low,pc=B[i-1].close,up=h-B[i-1].high,dn=B[i-1].low-l;
+    const tr=Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)),pdm=up>dn&&up>0?up:0,mdm=dn>up&&dn>0?dn:0;
+    if(i<=n){sTR+=tr;sP+=pdm;sM+=mdm;if(i<n)continue}else{sTR=sTR-sTR/n+tr;sP=sP-sP/n+pdm;sM=sM-sM/n+mdm}
+    const P=sTR?100*sP/sTR:0,Mi=sTR?100*sM/sTR:0,dx=(P+Mi)?100*Math.abs(P-Mi)/(P+Mi):0;pdi[i]=P;mdi[i]=Mi;
+    if(a===null){dxs.push(dx);if(dxs.length===n){a=dxs.reduce((x,y)=>x+y,0)/n;adx[i]=a}}else{a=(a*(n-1)+dx)/n;adx[i]=a}}
+  return{adx,pdi,mdi}}
+function setupC(B){const c=B.map(r=>r.close),v=B.map(r=>r.volume),L=B.length;
+  const e8=ema(c,8),e21=ema(c,21),v5=smaArr(v,5),v20=smaArr(v,20),{adx,pdi,mdi}=adx14(B);
+  const obv=[0];for(let i=1;i<L;i++)obv.push(obv[i-1]+(c[i]>c[i-1]?v[i]:c[i]<c[i-1]?-v[i]:0));
+  const obvHi=obv.map((_,i)=>i>=20?Math.max(...obv.slice(i-20,i)):null); // highest OBV of the previous 20 sessions (today excluded)
+  const udr=c.map((_,i)=>{if(i<20)return null;let u=0,d=0;for(let j=i-19;j<=i;j++){if(c[j]>c[j-1])u+=v[j];else if(c[j]<c[j-1])d+=v[j]}return d?u/d:(u?99:1)});
+  const cross=[];for(let i=21;i<L;i++){const a=e8[i]-e21[i],b=e8[i-1]-e21[i-1];if(a>0&&b<=0)cross.push({i,up:true});else if(a<0&&b>=0)cross.push({i,up:false})}
+  const at=i=>{const k={adx:adx[i]!=null&&adx[i]>20&&pdi[i]>mdi[i],ema:e8[i]>e21[i],vol:v5[i]!=null&&v20[i]!=null&&v5[i]>v20[i],udr:udr[i]!=null&&udr[i]>1.3,obv:obvHi[i]!=null&&obv[i]>=obvHi[i]};
+    k.n=[k.adx,k.ema,k.vol,k.udr,k.obv].filter(Boolean).length;k.long=k.n===5;return k};
+  return{e8,e21,v5,v20,adx,pdi,mdi,obv,obvHi,udr,cross,at}}
+/* Setup C exits — walk forward from each LONG signal (entry at that day's close):
+   1) close < EMA 8  -> sell half   2) close < EMA 21 -> sell all
+   3) low <= stop -> sell all  (initial stop = entry close - 1.5 x ATR14; then trails at highest high since entry - 2 x ATR14, only moves up)
+   4) MACD histogram down 3 bars in a row -> tighten trail to 1 x ATR14 */
+function atr14(B,n=14){const a=Array(B.length).fill(null);let v=null,s=0;
+  for(let i=1;i<B.length;i++){const tr=Math.max(B[i].high-B[i].low,Math.abs(B[i].high-B[i-1].close),Math.abs(B[i].low-B[i-1].close));
+    if(i<=n){s+=tr;if(i===n){v=s/n;a[i]=v}}else{v=(v*(n-1)+tr)/n;a[i]=v}}return a}
+function setupCTrades(B,C){const c=B.map(r=>r.close),hst=macd(c).map(x=>x?x.h:null),atr=atr14(B),L=B.length;
+  const ev=[],trail=Array(L).fill(null);let hold=0,hh=0,tr=0,mult=2,entry=null;
+  const down3=i=>i>=3&&[0,1,2].every(k=>hst[i-k]!=null&&hst[i-k-1]!=null&&hst[i-k]<hst[i-k-1]);
+  for(let i=21;i<L;i++){const r=B[i];
+    if(!hold){if(atr[i]!=null&&C.at(i).long){hold=100;hh=r.high;mult=2;tr=r.close-1.5*atr[i];entry={i,px:r.close,stop:tr};trail[i]=tr;ev.push({i,t:'entry',px:r.close,why:'Setup C LONG'})}continue}
+    if(r.low<=tr){ev.push({i,t:'exit',px:Math.min(r.open,tr),why:tr===entry.stop?'Initial 1.5 × ATR stop hit':`${mult} × ATR trail hit`});hold=0;continue}
+    if(r.close<C.e21[i]){ev.push({i,t:'exit',px:r.close,why:'Close < EMA 21'});hold=0;continue}
+    if(hold===100&&r.close<C.e8[i]){hold=50;ev.push({i,t:'half',px:r.close,why:'Close < EMA 8'})}
+    if(mult===2&&down3(i)){mult=1;ev.push({i,t:'tighten',px:null,why:'MACD histogram down 3 bars'})}
+    hh=Math.max(hh,r.high);tr=Math.max(tr,hh-mult*atr[i]);trail[i]=tr}
+  return{ev,trail,atr,hst,down3,hold,mult,tr,entry}}
+/* Bold + drawn exactly where EMA 8 crosses EMA 21 (Lightweight Charts series primitive) */
+function crossMarks(pts){let chart=null,series=null,req=null;
+  const renderer={draw:t=>t.useMediaCoordinateSpace(({context:c})=>{if(!chart)return;const ts=chart.timeScale();
+    pts.forEach(p=>{const x=ts.timeToCoordinate(p.time),y=series.priceToCoordinate(p.value);if(x==null||y==null)return;const r=6;
+      c.lineCap='round';c.strokeStyle='#0e1117';c.lineWidth=6;c.beginPath();c.moveTo(x-r,y);c.lineTo(x+r,y);c.moveTo(x,y-r);c.lineTo(x,y+r);c.stroke();
+      c.strokeStyle=p.color;c.lineWidth=3;c.beginPath();c.moveTo(x-r,y);c.lineTo(x+r,y);c.moveTo(x,y-r);c.lineTo(x,y+r);c.stroke()})})};
+  const view={renderer:()=>renderer,zOrder:()=>'top'};
+  return{attached:p=>{chart=p.chart;series=p.series;req=p.requestUpdate},detached:()=>{chart=series=null},paneViews:()=>[view],updateAllViews:()=>{}}}
 /* ===== TRADING RULES ENGINE ===== */
 const R2=x=>Math.round(x*100)/100;
 function evalRules(sym){
@@ -348,6 +414,33 @@ function renderSetups(sym){
     <tr><td>Invalidation</td><td style="font-size:11px">${s.inval}</td></tr></table>
     ${s.r1<1?`<div class="warn">Target 1 is below 1R — weak reward:risk; prefer waiting for a better entry.</div>`:''}
     <div class="note">Size = (capital × 1%) ÷ ${f2(s.risk)}</div></div>`});
+  { // Setup C — Claude for SGX banks
+    const B=calc(sym).B,C=setupC(B),n=B.length-1,k=C.at(n),V=x=>(x/1e6).toFixed(2)+'M';
+    const last=C.cross.length?C.cross[C.cross.length-1]:null;
+    h+=`<div class="setup" style="border-color:${k.long?'var(--up)':'var(--line)'}"><div class="sn">C · Claude for SGX banks <span class="status ${k.long?'pos':k.n>=3?'amb':'neg'}" style="font-size:10.5px;padding:1px 6px;margin-left:4px">${k.long?'LONG':k.n+' / 5'}</span></div>
+    <table>
+      <tr><td>ADX (14) &gt; 20 and +DI &gt; −DI</td><td>${f2(C.adx[n])} · +DI ${f2(C.pdi[n])} / −DI ${f2(C.mdi[n])} ${ck(k.adx)}</td></tr>
+      <tr><td>EMA 8 &gt; EMA 21</td><td>${f2(C.e8[n])} vs ${f2(C.e21[n])} ${ck(k.ema)}</td></tr>
+      <tr><td>5d avg vol &gt; 20d avg</td><td>${V(C.v5[n])} vs ${V(C.v20[n])} ${ck(k.vol)}</td></tr>
+      <tr><td>Up/down vol (20d) &gt; 1.3×</td><td>${C.udr[n]==null?'—':C.udr[n].toFixed(2)+'×'} ${ck(k.udr)}</td></tr>
+      <tr><td>OBV ≥ highest of previous 20 sessions</td><td>${k.obv?'at / above':((C.obv[n]-C.obvHi[n])/1e6).toFixed(2)+'M below'} ${ck(k.obv)}</td></tr>
+    </table>
+    <div class="note">${last?`Last EMA 8/21 cross: <span class="${last.up?'pos':'neg'}">${last.up?'bullish ✚':'bearish ✚'}</span> on ${B[last.i].time} (${n-last.i} bars ago).`:'No EMA 8/21 cross in the data.'} Long only when all 5 pass on a daily close.</div>`;
+    const T=setupCTrades(B,C),lastEv=T.ev[T.ev.length-1],dn=T.down3(n),cl=B[n].close;
+    const alerts=[];
+    if(T.hold){if(cl<C.e21[n])alerts.push(['Close < EMA 21 → sell all','neg']);else if(cl<C.e8[n])alerts.push(['Close < EMA 8 → sell half','amb']);if(dn)alerts.push(['MACD histogram down 3 bars → tighten trail to 1 × ATR','amb'])}
+    h+=`<div class="sn" style="margin-top:8px">Setup C exits ${T.hold?`<span class="status pos" style="font-size:10.5px;padding:1px 6px">HOLDING ${T.hold}%</span>`:'<span class="status" style="font-size:10.5px;padding:1px 6px;background:#21262d;color:var(--mut)">FLAT</span>'}</div>
+    <table>
+      <tr><td>Sell half if close &lt; EMA 8</td><td>${f2(C.e8[n])} ${cl<C.e8[n]?'<span class="neg">below</span>':'<span class="pos">above</span>'}</td></tr>
+      <tr><td>Sell all if close &lt; EMA 21</td><td>${f2(C.e21[n])} ${cl<C.e21[n]?'<span class="neg">below</span>':'<span class="pos">above</span>'}</td></tr>
+      <tr><td>ATR (14)</td><td>${f2(T.atr[n])} · 2 × = ${f2(2*T.atr[n])}</td></tr>
+      <tr><td>Stop (sell all)</td><td>${T.hold?`<b style="color:#ff9f43">${f2(T.tr)}</b> (${T.tr===T.entry.stop?'initial 1.5 × ATR':T.mult+' × ATR trail'+(T.mult===1?', tightened':'')})`:'— (no open position)'}</td></tr>
+      <tr><td>MACD histogram</td><td>${dn?'<span class="amb">down 3 bars → tighten</span>':'not down 3 bars in a row'}</td></tr>
+    </table>
+    ${T.hold?`<div class="note">Open since C buy on ${B[T.entry.i].time} at ${f2(T.entry.px)} (${n-T.entry.i} bars); initial stop was ${f2(T.entry.stop)}.</div>`:lastEv?`<div class="note">Last event: ${lastEv.t==='exit'?'exit':lastEv.t} on ${B[lastEv.i].time}${lastEv.px?' at '+f2(lastEv.px):''} — ${lastEv.why}.</div>`:''}
+    ${alerts.map(a=>`<div class="warn" style="color:var(--${a[1]==='neg'?'dn':'av'})">${a[0]}</div>`).join('')}
+    <div class="note">Hypothetical position from Setup C signals: C buy at the signal day's close; markers on the price chart show C buy ▲, ½ sell, T tighten, Exit ▼; orange dotted line = stop (1.5 × ATR initial, then 2 × ATR trail).</div></div>`;
+  }
   h+=`<div class="sn" style="margin-top:10px">Exit alerts (if holding)</div>`+(r.exits.length?r.exits.map(e=>`<div class="warn">${e}</div>`).join(''):'<div class="note">None triggered on the last bar.</div>');
   el.innerHTML=h;
 }
@@ -390,6 +483,7 @@ function renderSummary(active){
     <div class="kv"><span>AVWAP (${anchors[b.sym].slice(5)})</span><span>${a?f2(a.vw):'—'} <span class="${sgn(dist||0)}">${dist==null?'':(dist>=0?'+':'')+dist.toFixed(2)+'%'}</span></span>
     <span>MACD / Sig / Hist</span><span>${f3(m&&m.m)} / ${f3(m&&m.s)} / <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span></span>
     <span>Stoch %K / %D</span><span>${f2(s.k)} / ${f2(s.d)}</span>
+    <span>Setup C (Claude for SGX banks)</span><span>${(()=>{const k=setupC(B).at(n);return k.long?'<b class="pos">LONG ✓</b>':`<span class="${k.n>=3?'amb':'neg'}">${k.n} / 5</span>`})()}</span>
     <span>Est. ask vol % 1d / 5d / anchor</span><span>${(()=>{const ai=A.findIndex(x=>x);const p=x=>`<span class="${x>=0.5?'pos':'neg'}">${(x*100).toFixed(0)}</span>`;return `${p(buyShare(B,n))} / ${p(buyShare(B,n-4))} / ${p(ai<0?0.5:buyShare(B,ai))}`})()}</span></div>
     <div>${tags.map(t=>`<span class="tag ${t[1]}">${t[0]}</span>`).join('')}</div>`;
     d.onclick=()=>show(b.sym);el.appendChild(d);
@@ -409,7 +503,10 @@ show=function(sym){
   const cd=LightweightCharts.createChart(document.getElementById('cD'),{...baseOpt(180),width:W});
   const cm=LightweightCharts.createChart(document.getElementById('cM'),{...baseOpt(150),width:W});
   const cs=LightweightCharts.createChart(document.getElementById('cS'),{...baseOpt(150),width:W});
-  charts=[cp,cd,cm,cs];
+  const co=LightweightCharts.createChart(document.getElementById('cO'),{...baseOpt(140),width:W});
+  const ca=LightweightCharts.createChart(document.getElementById('cA'),{...baseOpt(140),width:W});
+  charts=[cp,cd,cm,cs,co,ca];
+  const C=setupC(B);
   const cand=cp.addCandlestickSeries({upColor:'#26a69a',downColor:'#ef5350',borderVisible:false,wickUpColor:'#26a69a',wickDownColor:'#ef5350'});
   cand.setData(B.map(({volume,...r})=>r));
   const vo={priceScaleId:'vol',priceFormat:{type:'volume'},lastValueVisible:false,priceLineVisible:false};
@@ -422,7 +519,38 @@ show=function(sym){
   const pts=(fn)=>B.map((r,i)=>A[i]?{time:r.time,value:fn(A[i])}:null).filter(Boolean);
   av.setData(pts(a=>a.vw));u1.setData(pts(a=>a.vw+a.sd));l1.setData(pts(a=>a.vw-a.sd));u2.setData(pts(a=>a.vw+2*a.sd));l2.setData(pts(a=>a.vw-2*a.sd));
   const ai=A.findIndex(x=>x);
-  if(ai>=0)cand.setMarkers([{time:B[ai].time,position:'belowBar',color:'#f5b400',shape:'arrowUp',text:'Anchor'}]);
+  // Setup C: EMA 8 / EMA 21 with crossover points marked by a bold +
+  const em=(c)=>cp.addLineSeries({color:c,lineWidth:1.5,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+  const s8=em('#e6edf3'),s21=em('#c792ea');
+  s8.setData(B.map((r,i)=>i>=7?{time:r.time,value:C.e8[i]}:{time:r.time}));s21.setData(B.map((r,i)=>i>=20?{time:r.time,value:C.e21[i]}:{time:r.time}));
+  const T=setupCTrades(B,C);
+  { // one stop line per trade, so flat periods show no line
+    let seg=[];const flush=last=>{if(seg.length){const l=cp.addLineSeries({color:'#ff9f43',lineWidth:1.5,lineStyle:1,priceLineVisible:false,lastValueVisible:last&&!!T.hold,crosshairMarkerVisible:false});l.setData(seg);seg=[]}};
+    B.forEach((r,i)=>{if(T.trail[i]!=null)seg.push({time:r.time,value:T.trail[i]});else flush(false)});flush(true);
+  }
+  const mks=T.ev.map(e=>e.t==='entry'?{time:B[e.i].time,position:'belowBar',color:'#26a69a',shape:'arrowUp',text:'C buy'}:
+    e.t==='half'?{time:B[e.i].time,position:'aboveBar',color:'#ff9f43',shape:'circle',text:'½'}:
+    e.t==='tighten'?{time:B[e.i].time,position:'aboveBar',color:'#8b949e',shape:'square',text:'T'}:
+    {time:B[e.i].time,position:'aboveBar',color:'#ef5350',shape:'arrowDown',text:'Exit'});
+  if(ai>=0)mks.push({time:B[ai].time,position:'belowBar',color:'#f5b400',shape:'arrowUp',text:'Anchor'});
+  mks.sort((x,y)=>x.time<y.time?-1:x.time>y.time?1:0);cand.setMarkers(mks);
+  s8.attachPrimitive(crossMarks(C.cross.map(x=>({time:B[x.i].time,value:(C.e8[x.i]+C.e21[x.i])/2,color:x.up?'#26a69a':'#ef5350'}))));
+  // volume averages (same 'vol' scale as the volume bars)
+  const va=(c)=>cp.addLineSeries({priceScaleId:'vol',color:c,lineWidth:1.5,priceFormat:{type:'volume'},priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+  const sv5=va('#58a6ff'),sv20=va('#ff9f43');
+  sv5.setData(B.map((r,i)=>C.v5[i]!=null?{time:r.time,value:C.v5[i]}:{time:r.time}));sv20.setData(B.map((r,i)=>C.v20[i]!=null?{time:r.time,value:C.v20[i]}:{time:r.time}));
+  // OBV with its 20-day high as the threshold
+  const so=co.addLineSeries({color:'#58a6ff',lineWidth:2,priceFormat:{type:'volume'},priceLineVisible:false,crosshairMarkerVisible:false});
+  so.setData(B.map((r,i)=>({time:r.time,value:C.obv[i]})));
+  const soh=co.addLineSeries({color:'#26a69a',lineWidth:1,lineStyle:2,priceFormat:{type:'volume'},priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+  soh.setData(B.map((r,i)=>C.obvHi[i]!=null?{time:r.time,value:C.obvHi[i]}:{time:r.time}));
+  // ADX 14 with +DI / -DI and the 20 threshold
+  const sa=ca.addLineSeries({color:'#f5b400',lineWidth:2,priceLineVisible:false,crosshairMarkerVisible:false});
+  sa.setData(B.map((r,i)=>C.adx[i]!=null?{time:r.time,value:C.adx[i]}:{time:r.time}));
+  const sp=ca.addLineSeries({color:'rgba(38,166,154,.7)',lineWidth:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+  const sm=ca.addLineSeries({color:'rgba(239,83,80,.7)',lineWidth:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false});
+  sp.setData(B.map((r,i)=>C.pdi[i]!=null?{time:r.time,value:C.pdi[i]}:{time:r.time}));sm.setData(B.map((r,i)=>C.mdi[i]!=null?{time:r.time,value:C.mdi[i]}:{time:r.time}));
+  sa.createPriceLine({price:20,color:'#8b949e',lineWidth:1,lineStyle:2,axisLabelVisible:true,title:W>600?'Trend threshold':''});
   // Order flow: 5-day Ask % line on one linear axis (daily split is in the price-chart volume bars) read as Ask % / Bid % (Bid % = 100 - Ask %).
   // Ask >= 60% = buying pressure (buyers paying the seller's price); Bid >= 60% = selling pressure (sellers accepting the buyer's price).
   const abFmt={type:'custom',formatter:v=>{const a=Math.max(0,Math.min(100,Math.round(v)));return `${a}/${100-a}`},minMove:1};
@@ -458,7 +586,11 @@ show=function(sym){
     const ab=f=>`Ask <b class="${f>=0.6?'pos':''}">${(f*100).toFixed(0)}%</b> / Bid <b class="${f<=0.4?'neg':''}">${((1-f)*100).toFixed(0)}%</b>`;const o5=OF_LABEL(dd.f5);
     document.getElementById('lgD').innerHTML=`Order flow ${dd.real?'<span class="pos">(time &amp; sales)</span>':'<span class="meta">(estimated)</span>'} · <span style="color:#58a6ff">5-day</span> ${ab(dd.f5)} <span class="${o5[1]}">→ ${o5[0]}</span> · Day ${ab(dd.f)} <span class="meta">· axis = Ask % / Bid %</span>`;
     document.getElementById('lgM').innerHTML=`MACD (12,26,9) <span style="color:#58a6ff">${f3(m&&m.m)}</span> <span style="color:#ff9f43">${f3(m&&m.s)}</span> <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span>`;
-    document.getElementById('lgS').innerHTML=`Stoch (14,3,3) <span style="color:#58a6ff">%K ${f2(s.k)}</span> <span style="color:#ff9f43">%D ${f2(s.d)}</span>`;};
+    document.getElementById('lgS').innerHTML=`Stoch (14,3,3) <span style="color:#58a6ff">%K ${f2(s.k)}</span> <span style="color:#ff9f43">%D ${f2(s.d)}</span>`;;
+    const V=x=>x==null?'—':(x/1e6).toFixed(2)+'M',k=C.at(i);
+    document.getElementById('lgP').innerHTML+=` · <span style="color:#e6edf3">EMA 8 ${f2(C.e8[i])}</span> <span style="color:#c792ea">EMA 21 ${f2(C.e21[i])}</span> · Vol avg <span style="color:#58a6ff">5d ${V(C.v5[i])}</span> <span style="color:#ff9f43">20d ${V(C.v20[i])}</span>`;
+    document.getElementById('lgO').innerHTML=`OBV <span style="color:#58a6ff">${V(C.obv[i])}</span> · <span style="color:#26a69a">prev. 20-session high ${V(C.obvHi[i])}</span> ${k.obv?'<span class="pos">· at / above ✓</span>':'<span class="meta">· below</span>'} · Up/down vol (20d) <b class="${C.udr[i]>1.3?'pos':''}">${C.udr[i]==null?'—':C.udr[i].toFixed(2)+'×'}</b>`;
+    document.getElementById('lgA').innerHTML=`ADX (14) <b style="color:#f5b400">${f2(C.adx[i])}</b> · <span class="pos">+DI ${f2(C.pdi[i])}</span> <span class="neg">−DI ${f2(C.mdi[i])}</span> · ${C.adx[i]==null?'':C.adx[i]<=20?'<span class="meta">no trend (ADX ≤ 20)</span>':C.pdi[i]>C.mdi[i]?'<span class="pos">strong uptrend (ADX &gt; 20, +DI &gt; −DI) ✓</span>':'<span class="neg">strong downtrend (ADX &gt; 20, −DI &gt; +DI)</span>'}`};
   lg(n-1);
   const idx={};B.forEach((r,i)=>idx[r.time]=i);
   charts.forEach(c=>c.subscribeCrosshairMove(p=>{if(!p||!p.time){lg(n-1);return}const t=typeof p.time==='string'?p.time:`${p.time.year}-${String(p.time.month).padStart(2,'0')}-${String(p.time.day).padStart(2,'0')}`;if(idx[t]!=null)lg(idx[t])}));
