@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" translate="no" class="notranslate">
 <head>
+<meta name="google" content="notranslate">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0e1117">
@@ -95,6 +96,7 @@ table.mx td.pos{color:var(--up)}table.mx td.neg{color:var(--dn)}
 <div class="main">
   <div class="charts">
     <div class="pane-l" id="lgP"></div><div id="cP"></div>
+    <div class="pane-l" id="lgV" style="padding-top:2px"></div>
     <div class="pane-l" style="padding-top:0"><span><span class="pos">■</span> est. ask volume (at seller's price)</span><span><span class="neg">■</span> est. bid volume (at buyer's price)</span><span id="volSrc">— split by close position in day's range; not true tick-level bid/ask data</span></div>
     <div class="pane-l" id="lgD"></div><div id="cD"></div>
     <div class="pane-l" id="lgM"></div><div id="cM"></div>
@@ -421,7 +423,7 @@ function renderSetups(sym){
     <table>
       <tr><td>ADX (14) &gt; 20 and +DI &gt; −DI</td><td>${f2(C.adx[n])} · +DI ${f2(C.pdi[n])} / −DI ${f2(C.mdi[n])} ${ck(k.adx)}</td></tr>
       <tr><td>EMA 8 &gt; EMA 21</td><td>${f2(C.e8[n])} vs ${f2(C.e21[n])} ${ck(k.ema)}</td></tr>
-      <tr><td>5d avg vol &gt; 20d avg</td><td>${V(C.v5[n])} vs ${V(C.v20[n])} ${ck(k.vol)}</td></tr>
+      <tr><td>5-day avg vol (blue) &gt; 20-day avg (orange)</td><td>${V(C.v5[n])} vs ${V(C.v20[n])} ${ck(k.vol)}</td></tr>
       <tr><td>Up/down vol (20d) &gt; 1.3×</td><td>${C.udr[n]==null?'—':C.udr[n].toFixed(2)+'×'} ${ck(k.udr)}</td></tr>
       <tr><td>OBV ≥ highest of previous 20 sessions</td><td>${k.obv?'at / above':((C.obv[n]-C.obvHi[n])/1e6).toFixed(2)+'M below'} ${ck(k.obv)}</td></tr>
     </table>
@@ -588,7 +590,8 @@ show=function(sym){
     document.getElementById('lgM').innerHTML=`MACD (12,26,9) <span style="color:#58a6ff">${f3(m&&m.m)}</span> <span style="color:#ff9f43">${f3(m&&m.s)}</span> <span class="${sgn(m?m.h:0)}">${f3(m&&m.h)}</span>`;
     document.getElementById('lgS').innerHTML=`Stoch (14,3,3) <span style="color:#58a6ff">%K ${f2(s.k)}</span> <span style="color:#ff9f43">%D ${f2(s.d)}</span>`;;
     const V=x=>x==null?'—':(x/1e6).toFixed(2)+'M',k=C.at(i);
-    document.getElementById('lgP').innerHTML+=` · <span style="color:#e6edf3">EMA 8 ${f2(C.e8[i])}</span> <span style="color:#c792ea">EMA 21 ${f2(C.e21[i])}</span> · Vol avg <span style="color:#58a6ff">5d ${V(C.v5[i])}</span> <span style="color:#ff9f43">20d ${V(C.v20[i])}</span>`;
+    document.getElementById('lgP').innerHTML+=` · <span style="color:#e6edf3">EMA 8 ${f2(C.e8[i])}</span> <span style="color:#c792ea">EMA 21 ${f2(C.e21[i])}</span>`;
+    document.getElementById('lgV').innerHTML=`Volume ${r.time}: <b>${V(r.volume)}</b> · <span style="color:#58a6ff">━ 5-day avg ${V(C.v5[i])}</span> · <span style="color:#ff9f43">━ 20-day avg ${V(C.v20[i])}</span> ${C.v5[i]!=null&&C.v20[i]!=null?(C.v5[i]>C.v20[i]?'<span class="pos">· 5-day above 20-day ✓</span>':'<span class="meta">· 5-day below 20-day</span>'):''}`;
     document.getElementById('lgO').innerHTML=`OBV <span style="color:#58a6ff">${V(C.obv[i])}</span> · <span style="color:#26a69a">prev. 20-session high ${V(C.obvHi[i])}</span> ${k.obv?'<span class="pos">· at / above ✓</span>':'<span class="meta">· below</span>'} · Up/down vol (20d) <b class="${C.udr[i]>1.3?'pos':''}">${C.udr[i]==null?'—':C.udr[i].toFixed(2)+'×'}</b>`;
     document.getElementById('lgA').innerHTML=`ADX (14) <b style="color:#f5b400">${f2(C.adx[i])}</b> · <span class="pos">+DI ${f2(C.pdi[i])}</span> <span class="neg">−DI ${f2(C.mdi[i])}</span> · ${C.adx[i]==null?'':C.adx[i]<=20?'<span class="meta">no trend (ADX ≤ 20)</span>':C.pdi[i]>C.mdi[i]?'<span class="pos">strong uptrend (ADX &gt; 20, +DI &gt; −DI) ✓</span>':'<span class="neg">strong downtrend (ADX &gt; 20, −DI &gt; +DI)</span>'}`};
   lg(n-1);
